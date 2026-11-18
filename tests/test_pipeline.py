@@ -196,3 +196,13 @@ def test_parse_json_repairs_misplaced_bracket_per_record():
     assert [r["id"] for r in parse_json(bad)["m"]] == ["M1", "M2"]
     bad2 = '{"m":[{"id":"M1","it":[{"k":"a","v":1}]]},{"id":"M2","it":[]}]}'              # extra ]
     assert [r["id"] for r in parse_json(bad2)["m"]] == ["M1", "M2"]
+
+
+def test_event_end_time_becomes_rule_not_block_anchor(script):
+    pipeline.process("PACK all facts")
+    script["closes"] = ("Registrar", "institution", [{"a": "schedule", "e": "event end", "k": "at_time", "v": "end 23:00",
+                                                       "q": "building closes at 23:00"}], False)
+    state, rep = pipeline.process("building closes at 11 pm")
+    rules = [c for c in state["plan"]["validation"]["checks"] if c["name"].startswith("rule")]
+    assert rules and rules[0]["result"] in ("PASS", "UNRESOLVED")
+    assert not any("matches no schedule block" in c["detail"] for c in state["plan"]["validation"]["checks"])

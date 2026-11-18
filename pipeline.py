@@ -2,6 +2,7 @@
 messages not seen before. Transactional: a new item that breaks a passing check is rejected and the
 previous valid plan is kept."""
 import copy
+import re
 import json
 from datetime import datetime
 from pathlib import Path
@@ -194,6 +195,16 @@ def _venue_prices(items, msg_id):
 
 def _normalize(item):
     """Fix common key misuse by a small model (generic, not pack-specific)."""
+    if item["k"] == "at_time" and set(item["e"].lower().split()) & {"end", "event", "finish", "close", "closing",
+                                                                       "building", "start", "begin"}:
+        # a time for the whole event, not for one block: start time or an "end by" rule
+        from planner import clock
+        t = clock(re.sub(r"^(end|by|until)\s*", "", str(item["v"]).lower()))
+        if t is not None and ("start" in item["e"].lower() or "begin" in item["e"].lower()):
+            item["a"], item["k"], item["e"] = "event", "start_time", ""
+        elif t is not None:
+            item["a"], item["k"], item["t"], item["h"] = "schedule", "rule", "rule", True
+            item["c"] = {"m": "end_min", "op": "lte", "v": t}
     if item["t"] == "irrelevant":
         item["k"] = "other"
     elif item["k"] == "expense" and "deliver" in item["e"].lower():
