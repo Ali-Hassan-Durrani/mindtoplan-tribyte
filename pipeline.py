@@ -28,7 +28,7 @@ ROUTES = {
     "max_teams_per_judge": ("judging", "venue", "food", "budget", "schedule"),
     "late_min": ("judging", "schedule"), "expense": ("budget",), "optional_cost": ("budget",),
     "at_time": ("schedule",), "diet_count": ("food", "budget"), "judges_leaving_early": AREAS,
-    "cost_per_team": ("budget",), "cost_per_student": ("budget",), "cost_per_person": ("budget",),
+    "cost_per_team": ("budget",), "cost_per_student": ("budget",), "cost_per_person": ("budget",), "cost_per_judge": ("budget",),
     "percent_charge": ("budget",), "reserve_pct": ("budget",),
 }
 

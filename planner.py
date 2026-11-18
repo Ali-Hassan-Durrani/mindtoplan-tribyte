@@ -268,45 +268,55 @@ def judging_plan(d):
 def budget_plan(v, d, venue, food):
     lines = []
     for f in v.all("expense"):
-        lines.append({"item": f["e"], "amount": D(num(f["v"])), "type": "committed", "evidence": ev(f)})
+        lines.append({"item": f["e"], "amount": D(num(f["v"])), "type": "committed", "group": "committed",
+                      "evidence": ev(f)})
     if venue:
         lines.append({"item": f"Venue: {venue['name']}", "amount": D(venue["price"]), "type": "estimated",
-                      "evidence": venue["evidence"]})
+                      "group": "venue", "evidence": venue["evidence"]})
     if food:
         lines.append({"item": f"Food: {food['qty']} x {food['name']}", "amount": D(food["cost"]),
-                      "type": "estimated", "evidence": food["evidence"]})
+                      "type": "estimated", "group": "food", "evidence": food["evidence"]})
     if d["honorarium"] and d["judges_used"]:
         lines.append({"item": f"Judge honorarium: {d['judges_used']} x Rs {int(d['honorarium']):,}",
                       "amount": D(d["honorarium"]) * d["judges_used"], "type": "estimated",
-                      "evidence": ev(v.get("honorarium", "judging"))})
-    # costs that scale with teams / people
+                      "group": "judging", "evidence": ev(v.get("honorarium", "judging"))})
+    issues = []
+    # costs that scale with teams / people / judges; a missing quantity is never invented
     for k, n, unit in (("cost_per_team", d["teams"], "teams"), ("cost_per_student", d["students"], "students"),
-                       ("cost_per_person", d["headcount"], "people")):
+                       ("cost_per_person", d["headcount"], "people"), ("cost_per_judge", d["judges_used"], "judges")):
         for f in v.all(k):
-            if n:
-                lines.append({"item": f"{f['e'] or k.replace('_', ' ')}: {int(n)} {unit} x Rs {int(num(f['v']) or 0):,}",
-                              "amount": D(num(f["v"])) * int(n), "type": "estimated", "evidence": ev(f)})
-    # percentage charges (tax, service charge) on a named line or on everything so far
+            if not n:
+                issues.append(f"{f['e'] or k}: Rs {int(num(f['v']) or 0):,} per {unit[:-1]} but the number of {unit} is unknown")
+                continue
+            lines.append({"item": f"{f['e'] or k.replace('_', ' ')}: {int(n)} {unit} x Rs {int(num(f['v']) or 0):,}",
+                          "amount": D(num(f["v"])) * int(n), "type": "estimated", "group": "other", "evidence": ev(f)})
+    # percentage charges: applied once to the NON-percentage lines they name (no recursion, no double count)
     base_lines = list(lines)
+    groups = {"venue": ("venue", "hall", "rent", "room"), "food": ("food", "catering", "meal", "lunch", "caterer"),
+              "judging": ("judging", "judge", "judges", "honorarium"), "committed": ("committed", "spent", "paid", "ordered")}
     for f in v.all("percent_charge"):
         pct, target = num(f["v"]) or 0, norm(f["e"])
-        if target in ("", "all", "total", "event", "overall", "everything", "bill"):
-            base = [l for l in base_lines if l["type"] != "committed"]
+        words = set(target.split())
+        group = next((g for g, syn in groups.items() if words & set(syn)), None)
+        if not words or words & {"all", "total", "event", "overall", "everything", "bill", "budget"}:
+            base, what = base_lines, "all costs"
+        elif group:
+            base, what = [l for l in base_lines if l["group"] == group], group
         else:
-            words = {w for w in target.split() if len(w) > 2}
-            base = [l for l in base_lines if words & set(norm(l["item"]).split())]
+            base = [l for l in base_lines if {w for w in words if len(w) > 2} & set(norm(l["item"]).split())]
+            what = ", ".join(l["item"] for l in base)
+        if not base:
+            issues.append(f"{pct:g}% charge on '{f['e']}' matches no budget line")
+            continue
         amount = sum((l["amount"] for l in base), Decimal(0)) * Decimal(str(pct)) / 100
-        lines.append({"item": f"{pct:g}% {f['e'] or 'charge'} on " + (", ".join(l["item"] for l in base) or "nothing matched"),
-                      "amount": amount.quantize(Decimal("1")), "type": "estimated", "evidence": ev(f)})
-    reserve = v.get("reserve_pct")
-    if reserve and d["budget_total"]:
-        pct = num(reserve["v"]) or 0
-        lines.append({"item": f"Reserve kept unspent ({pct:g}% of budget)",
-                      "amount": (D(d["budget_total"]) * Decimal(str(pct)) / 100).quantize(Decimal("1")),
-                      "type": "reserve", "evidence": ev(reserve)})
+        lines.append({"item": f"{pct:g}% charge on {what}", "amount": amount.quantize(Decimal("1")),
+                      "type": "percent", "group": "percent", "evidence": ev(f)})
+    reserve_f, reserve = v.get("reserve_pct"), Decimal(0)
+    if reserve_f and d["budget_total"]:
+        reserve = (D(d["budget_total"]) * Decimal(str(num(reserve_f["v"]) or 0)) / 100).quantize(Decimal("1"))
     total = sum((l["amount"] for l in lines), Decimal(0))
     cap = D(d["budget_total"]) if d["budget_total"] is not None else None
-    remaining = cap - total if cap is not None else None
+    remaining = cap - total - reserve if cap is not None else None
     optional = []
     for f in v.optional:
         amt = D(num(f["v"]))
@@ -314,7 +324,8 @@ def budget_plan(v, d, venue, food):
                          "affordable": remaining is not None and amt <= remaining,
                          "note": "optional quote, NOT included in total"})
     return {"lines": lines, "committed": sum((l["amount"] for l in lines if l["type"] == "committed"), Decimal(0)),
-            "total": total, "budget": cap, "remaining": remaining, "optional": optional}
+            "total": total, "budget": cap, "remaining": remaining, "optional": optional, "issues": issues,
+            "reserve": reserve, "reserve_evidence": ev(reserve_f) if reserve_f else None}
 
 
 def build_plan(items):

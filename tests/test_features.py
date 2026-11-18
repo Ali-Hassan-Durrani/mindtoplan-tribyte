@@ -28,9 +28,8 @@ def test_cost_per_team_and_person():
 def test_percent_tax_on_venue_and_on_all():
     p = plan_of([item("budget", "percent_charge", 16, e="venue", sender="Campus Venues", role="vendor")])
     assert p["budget"]["total"] == BASE_TOTAL + 32000
-    p = plan_of([item("budget", "percent_charge", 10, e="all", sender="Accounts", role="finance")])
-    non_committed = BASE_TOTAL - 60000
-    assert p["budget"]["total"] == BASE_TOTAL + Decimal(non_committed) / 10
+    p = plan_of([item("budget", "percent_charge", 10, e="total", sender="Accounts", role="finance")])
+    assert p["budget"]["total"] == BASE_TOTAL + Decimal(BASE_TOTAL) / 10      # every non-percentage line
 
 
 def test_reserve_forces_cheaper_food_or_invalid():
@@ -96,3 +95,42 @@ def test_veg_option_matches_vegetarian_need():
     p = plan_of([item("food", "price_per_head", 700, e="veg thali", sender="Biryani Point", role="vendor"),
                  item("food", "diet_count", 5, e="vegetarian")])
     assert p["food"]["splits"][0]["name"] == "veg thali" and p["food"]["name"] == "regular meal"
+
+
+def test_percent_on_named_base_and_specific_line_no_double_count():
+    p = plan_of([item("budget", "percent_charge", 10, e="food", sender="Accounts", role="finance"),
+                 item("budget", "percent_charge", 50, e="trophies", sender="Accounts", role="finance"),
+                 item("budget", "percent_charge", 5, e="committed", sender="Accounts", role="finance")])
+    food = 102 * 900 + 3000
+    assert p["budget"]["total"] == BASE_TOTAL + Decimal(food) / 10 + 30000 + 3000   # no % on a % line
+
+
+def test_percent_on_judging_base():
+    p = plan_of([item("budget", "percent_charge", 25, e="judging", sender="Accounts", role="finance")])
+    assert p["budget"]["total"] == BASE_TOTAL + 6 * 4000 // 4
+
+
+def test_reserve_shown_separately_and_counted_in_check():
+    p = plan_of([item("budget", "reserve_pct", 10, sender="Accounts", role="finance")])
+    b = p["budget"]
+    assert b["total"] == BASE_TOTAL and b["reserve"] == 90000 and b["remaining"] == 900000 - BASE_TOTAL - 90000
+
+
+def test_cost_per_judge():
+    p = plan_of([item("budget", "cost_per_judge", 1500, e="judge travel", sender="Accounts", role="finance")])
+    assert p["budget"]["total"] == BASE_TOTAL + 6 * 1500
+
+
+def test_missing_quantity_needs_clarification():
+    items = [i for i in base_pack() if i["k"] != "team_size"] +         [item("budget", "cost_per_team", 500, e="kit", sender="Accounts", role="finance")]
+    from facts import resolve
+    resolve(items)
+    p = build_plan(items)
+    chk = check(p, "within budget")
+    assert chk["result"] == "UNRESOLVED" and "number of teams is unknown" in chk["detail"]
+    assert p["validation"]["status"] != "VALID"
+
+
+def test_percent_with_unknown_base_needs_clarification():
+    p = plan_of([item("budget", "percent_charge", 5, e="spaceship", sender="Accounts", role="finance")])
+    assert check(p, "within budget")["result"] == "UNRESOLVED"

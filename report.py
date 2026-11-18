@@ -68,6 +68,8 @@ def plan_text(state):
     for l in b["lines"]:
         L.append(f"  {l['type']:<10} {l['item']:<45} {rs(l['amount']):>14}")
     L.append(f"  {'TOTAL':<56} {rs(b['total']):>14}")
+    if b.get("reserve"):
+        L.append(f"  {'Reserve held back (not spent)':<56} {rs(b['reserve']):>14}")
     L.append(f"  {'Budget':<56} {rs(b['budget']):>14}")
     L.append(f"  {'Remaining':<56} {rs(b['remaining']):>14}")
     for o in b["optional"]:

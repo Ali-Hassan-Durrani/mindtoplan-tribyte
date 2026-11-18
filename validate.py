@@ -96,8 +96,14 @@ def validate(plan, view):
     if b["budget"] is None:
         add("within budget", "budget", "UNRESOLVED", "no budget stated")
     else:
-        add("within budget", "budget", "PASS" if b["total"] <= b["budget"] else "FAIL",
-            f"total Rs {b['total']:,} vs budget Rs {b['budget']:,} (remaining Rs {b['remaining']:,})")
+        res_ = b.get("reserve") or 0
+        over = b["total"] + res_ > b["budget"]
+        detail = (f"total Rs {b['total']:,}" + (f" + reserve Rs {res_:,}" if res_ else "")
+                  + f" vs budget Rs {b['budget']:,} (remaining Rs {b['remaining']:,})")
+        if not over and b.get("issues"):
+            add("within budget", "budget", "UNRESOLVED", "; ".join(b["issues"]))
+        else:
+            add("within budget", "budget", "FAIL" if over else "PASS", detail)
     # 3. venue fits
     if not venue:
         why = "; ".join(f"{r['name']}: {r['reason']}" for r in plan["venue"]["rejected"]) or "no venue options"
