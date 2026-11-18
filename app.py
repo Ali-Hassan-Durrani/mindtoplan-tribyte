@@ -70,11 +70,13 @@ if "dark" not in st.session_state:
     st.session_state["dark"] = False
 state = load_state()
 with st.sidebar:
-    st.markdown("### MindToPlan")
-    st.caption("Hackathon planner · reads messages once, plans in Python")
+    html('<div class="brand"><div class="ic">&#9636;</div><div><div class="t1">MindToPlan AI</div>'
+         '<div class="t2">Event ops engine</div></div></div>'
+         f'<div class="modelpill"><span><span class="d"></span>{e(config.MODEL_NAME or "not set")}</span>'
+         f'<span>{"ALLOWED" if config.ALLOWED_MODELS else "TEAM CHOICE"}</span></div>')
     st.toggle("Dark mode", key="dark")
-    st.caption(f"Model: `{config.MODEL_NAME or 'not set'}`")
-    up = st.file_uploader("Message pack or new messages (.txt)", type=["txt"])
+    html('<div class="slabel">Active step / controls</div>')
+    up = st.file_uploader("Load message pack or new messages (.txt)", type=["txt"])
     if up and st.button("Process file", type="primary", width="stretch"):
         run(up.getvalue().decode("utf-8-sig"), up.name)
         st.rerun()
@@ -85,7 +87,8 @@ with st.sidebar:
         reset()
         st.session_state.pop("last", None)
         st.rerun()
-    st.caption("Official command: `python plan.py <file>` (same function as this page).")
+    html('<div class="slabel" style="margin-top:28px">Execution CLI helper</div>'
+         '<div class="modelpill"><span>python plan.py &lt;messages.txt&gt;</span></div>')
 
 html(css("dark" if st.session_state["dark"] else "light"))
 
@@ -105,18 +108,21 @@ unres = [c for c in checks if c["result"] == "UNRESOLVED"]
 last = st.session_state.get("last") or state["updates"][-1]
 n_upd = len([u for u in state["updates"] if u["mode"] == "update"])
 
-html(f'<div class="crumbs"><b>Pack loaded</b> ({sum(1 for m in state["messages"] if m["update_id"] == "FULL")} messages)'
-     f' · <b>{n_upd}</b> update(s) · last run <b>{e(last["update_id"])}</b> · {len(state["trace"])} model call(s) in total</div>')
+step = 3 if n_upd else 2
+html('<div class="steps">' + "".join(
+    f'<span class="step {"done" if i < step else "now" if i == step else ""}">{"&#10003;" if i < step else "&#9675;"} {i}. {t}</span>'
+    for i, t in ((1, "Load message pack"), (2, "Review the plan"), (3, "Add new messages"))) + "</div>")
 if v["status"] == "VALID":
     sentence = f"All {len(checks)} checks pass."
 elif v["status"] == "INVALID":
     sentence = "Failing: " + "; ".join(f"{c['name']} — {c['detail']}" for c in fails)
 else:
     sentence = "Needs clarification: " + "; ".join(f"{c['name']} — {c['detail']}" for c in unres)
-html(f'<div class="panel status {v["status"].split()[0]}"><span class="s">{e(v["status"])}</span>'
-     f'<span>{e(sentence)}</span></div>')
+html(f'<div class="panel status {v["status"].split()[0]}"><span class="s">&#10003; {e(v["status"])}</span>'
+     f'<span class="sent">{e(sentence)}</span><span class="st">{len(state["messages"])} messages · '
+     f'{n_upd} update(s) · {len(state["trace"])} model call(s)</span></div>')
 
-tabs = st.tabs(["Overview", "Plan", "Messages", "Trace", "Update"])
+tabs = st.tabs(["Overview", "Event Plan", "Messages & Facts", "Execution Trace", "Incremental Update"])
 
 # ---------------- overview ----------------
 with tabs[0]:
@@ -125,19 +131,26 @@ with tabs[0]:
                 ("Headcount", d["headcount"], f"{int(d['students'] or 0)} + {int(d['staff'])} staff + {d['judges_used'] or 0} judges"),
                 ("Budget", rs(b["budget"]), ""),
                 ("Planned", rs(b["total"]), f"committed {rs(b['committed'])}"),
-                ("Remaining", rs(b["remaining"]), f"reserve {rs(b['reserve'])}" if b.get("reserve") else "")]))
-    st.markdown("### Checks")
-    html('<div class="panel" style="padding:4px 10px">' + table(
-        [{"": f'<span>{dot(c["result"])}</span>', "check": c["name"], "result": c["result"],
-          "meaning": PLAIN.get(c["name"], "Requirement stated in the messages."), "detail": c["detail"]} for c in checks],
-        ["", "check", "result", "meaning", "detail"]) + "</div>")
+                ("Remaining", rs(b["remaining"]),
+                 (f"+{100 * b['remaining'] / b['budget']:.1f}% slack" if b["budget"] and b["remaining"] is not None
+                  and b["remaining"] >= 0 else "over budget"), bool(b["remaining"] is not None and b["remaining"] >= 0))]))
+    npass = sum(c["result"] == "PASS" for c in checks)
+    html(f'<div class="sechead"><span class="t">Checks</span>{tag(f"{npass}/{len(checks)} pass", "acc")}'
+         '<span class="r">&#9679; deterministic Python validator</span></div>')
+    rk = {"PASS": "ok", "FAIL": "bad", "UNRESOLVED": "warn"}
+    html('<div class="chkgrid">' + "".join(
+        f'<div class="chk"><div class="h">{"&#9745;" if c["result"] == "PASS" else "&#9746;" if c["result"] == "FAIL" else "&#9888;"} '
+        f'{e(c["name"])}<span class="r">{tag(c["result"], rk.get(c["result"], "info"))}</span></div>'
+        f'<div class="m">{e(PLAIN.get(c["name"], "Requirement stated in the messages."))}</div>'
+        f'<div><span class="mono">{e(c["detail"])}</span></div></div>' for c in checks) + "</div>")
     rejected = [i for i in state["items"] if i["status"] == "rejected"]
     if rejected:
-        st.markdown("### Rejected")
+        html(f'<div class="sechead"><span class="t">&#8856; Rejected messages</span>'
+             f'{tag(f"{len(rejected)} blocked", "bad")}</div>')
         for i in rejected:
-            html(f'<div class="panel rej">{tag(i["msg"], "bad")}<b>{e(i["sender"])}</b>'
-                 f'<div class="q">“{e(i["q"])}”</div><div class="muted small">{e(i["reason"])}</div></div>')
-    st.markdown("### Last run")
+            html(f'<div class="panel rej">{tag(i["msg"], "bad")}<b style="font-size:1.15rem">{e(i["sender"])}</b>'
+                 f'<div class="q">“{e(i["q"])}”</div><div class="reason">&#9432; Reason: {e(i["reason"])}</div></div>')
+    html('<div class="sechead"><span class="t">Last run</span></div>')
     imp = last["impact"]
     full_tokens = next((u["tokens"]["total"] for u in state["updates"] if u["mode"] == "full"), None)
     pred = ""
