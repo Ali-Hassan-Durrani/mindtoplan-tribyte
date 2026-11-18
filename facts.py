@@ -10,6 +10,7 @@ MONTHS = {m: i for i, m in enumerate(
 # keys where several values can be true at once (no superseding)
 MULTI_KEYS = {"feature", "lacks_feature", "requires_feature", "rule", "other", "late_min", "judges_leaving_early"}
 NOT_FACT_KINDS = {"suggestion", "question", "irrelevant"}
+MAGNITUDE_LIMIT = 20     # a correction that changes a number 20x or more is treated as a unit/typing error
 VENDOR_KEYS = {"capacity", "price", "feature", "unavailable", "price_per_head", "delivery_fee", "tier", "order_qty"}
 
 
@@ -75,6 +76,12 @@ def resolve(items):
         k = key_of(f)
         old = active.get(k)
         if old is not None:
+            a, b = num(old["v"]), num(f["v"])
+            if a and b and max(a, b) / min(a, b) >= MAGNITUDE_LIMIT:
+                f["status"] = "rejected"
+                f["reason"] = (f"magnitude check: {f['k']} {b:,.0f} vs previous {a:,.0f} from {old['msg']} "
+                               f"(x{max(a, b) / min(a, b):,.0f}); likely a unit or typing error")
+                continue
             same_sender = norm(old["sender"]) == norm(f["sender"])
             vendor_offer = f["role"] == "vendor" and f["k"] in VENDOR_KEYS   # a vendor owns its own offer terms
             if same_sender or vendor_offer or \

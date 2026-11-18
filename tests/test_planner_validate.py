@@ -131,3 +131,18 @@ def test_claim_about_core_fact_is_rejected_not_applied():
     resolve(items)
     assert items[-1]["status"] == "rejected" and "not a confirmed fact" in items[-1]["reason"]
     assert build_plan(items)["derived"]["students"] == 90
+
+
+def test_magnitude_check_rejects_unit_error():
+    items = base_pack() + [item("venue", "price", 200, e="Auditorium", t="update", sender="Campus Venues",
+                                role="vendor", msg="T7", order=999)]
+    resolve(items)
+    assert items[-1]["status"] == "rejected" and "magnitude check" in items[-1]["reason"]
+    assert build_plan(items)["venue"]["chosen"]["price"] == 200000
+
+
+def test_normal_correction_passes_magnitude_check():
+    items = base_pack() + [item("venue", "price", 230000, e="Auditorium", t="update", sender="Campus Venues",
+                                role="vendor", msg="T8", order=999)]
+    resolve(items)
+    assert items[-1]["status"] == "accepted"
