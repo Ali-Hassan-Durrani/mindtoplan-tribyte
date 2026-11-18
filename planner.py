@@ -4,7 +4,7 @@ import re
 from decimal import Decimal
 
 import config
-from facts import View, norm, num
+from facts import View, norm, num, same_facility
 from validate import validate
 
 
@@ -76,7 +76,7 @@ def venue_candidates(v, d):
         elif cap < d["headcount"]:
             why = f"seats {int(cap)} < headcount {d['headcount']}"
         else:
-            lacking = [n for n in needs if not any(n in f or f in n for f in feats)]
+            lacking = [n for n in needs if not any(same_facility(n, f) for f in feats)]
             if lacking:
                 why = f"lacks required: {', '.join(lacking)}"
         row = {"name": o["_name"], "capacity": cap, "price": price, "features": feats,
@@ -336,7 +336,14 @@ def budget_plan(v, d, venue, food):
         pct, target = num(f["v"]) or 0, norm(f["e"])
         words = set(target.split())
         group = next((g for g, syn in groups.items() if words & set(syn)), None)
-        if not words or words & {"all", "total", "event", "overall", "everything", "bill", "budget"}:
+        generic = not words or words & {"all", "total", "event", "overall", "everything", "bill", "budget"}
+        if generic and f["role"] == "vendor":
+            # a vendor's "on the total" means the vendor's own bill (caterer -> food, venue -> venue)
+            mine = {x["k"] for x in v.facts if norm(x["sender"]) == norm(f["sender"])}
+            group = "food" if mine & {"price_per_head", "delivery_fee", "tier"} else \
+                "venue" if mine & {"capacity", "price"} else None
+            generic = group is None
+        if generic:
             base, what = base_lines, "all costs"
         elif group:
             base, what = [l for l in base_lines if l["group"] == group], group

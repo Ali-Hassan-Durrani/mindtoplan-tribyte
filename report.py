@@ -72,6 +72,9 @@ def plan_text(state):
         L.append(f"  {'Reserve held back (not spent)':<56} {rs(b['reserve']):>14}")
     L.append(f"  {'Budget':<56} {rs(b['budget']):>14}")
     L.append(f"  {'Remaining':<56} {rs(b['remaining']):>14}")
+    if b["budget"] is not None:
+        fits = b["total"] + (b.get("reserve") or 0) <= b["budget"]
+        L.append(f"  Fits within budget: {'YES' if fits else 'NO'} (total {rs(b['total'])} against {rs(b['budget'])})")
     for o in b["optional"]:
         L.append(f"  optional (not in total): {o['item']} {rs(o['amount'])} from {o['sender']} — "
                  + ("affordable" if o["affordable"] else "NOT affordable"))
@@ -136,10 +139,25 @@ def write_outputs(state):
     (config.OUT_DIR / "submission.txt").write_text(submission_text(state), encoding="utf-8")
 
 
+def trace_summary(state):
+    """One line per AI call (number, model, purpose, tokens) plus the total."""
+    from llm import Trace
+    purpose = {"reading": "reading messages"}
+    L = ["TRACE SUMMARY (one line per AI call)", "=" * 60]
+    for r in state["trace"]:
+        tok = (f"in {r['input_tokens']} / out {r['output_tokens']} / total {r['total_tokens']} tokens"
+               if r["total_tokens"] is not None else "tokens: unavailable (provider reported none)")
+        L.append(f"Call {r['n']:>2} | model {r['model']} | for: {purpose.get(r['area'], r['area'])} "
+                 f"[{r['area']}] | {tok} | {'ok' if r['ok'] else 'FAILED: ' + (r['error'] or '')[:60]}")
+    t = Trace(state["trace"]).totals()
+    L.append(f"TOTAL: {t['calls']} AI calls | input {t['input']} | output {t['output']} | total {t['total']} tokens")
+    return "\n".join(L) + "\n"
+
+
 def submission_text(state):
-    """The file to upload: final plan + full trace + totals in one place."""
-    return ("MINDTOPLAN SUBMISSION\n" + "#" * 60 + "\n\n" + plan_text(state) + "\n\n" + "#" * 60 + "\n\n"
-            + trace_text(state))
+    """The file to upload: final plan + one-line-per-call trace + full trace with totals."""
+    return ("MINDTOPLAN SUBMISSION\n" + "#" * 60 + "\n\n" + plan_text(state) + "\n" + "#" * 60 + "\n\n"
+            + trace_summary(state) + "\n" + "#" * 60 + "\nFULL TRACE (inputs and outputs)\n\n" + trace_text(state))
 
 
 def print_run(state, report):

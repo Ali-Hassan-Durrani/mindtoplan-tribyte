@@ -144,8 +144,11 @@ def read_messages(msgs, known_entities, budgeter, trace, update_id):
                      max_tokens=4000)
     if out is None:
         return None
-    if isinstance(out, list):          # some models drop the outer {"m": ...} wrapper
-        out = {"m": out}
+    if isinstance(out, list):          # some models drop the outer {"m": ...} wrapper, or wrap it in a list
+        out = out[0] if len(out) == 1 and isinstance(out[0], dict) and "m" in out[0] else {"m": out}
+    if isinstance(out, dict) and len(out.get("m") or []) == 1 and isinstance(out["m"][0], dict) \
+            and "m" in out["m"][0] and "id" not in out["m"][0]:
+        out = out["m"][0]              # {"m":[{"m":[...]}]}: one nesting level too deep
     try:
         parsed = ReadOut.model_validate(out)
     except ValidationError as e:

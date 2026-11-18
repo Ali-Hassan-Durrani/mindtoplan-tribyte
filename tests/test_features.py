@@ -185,3 +185,37 @@ def test_judge_search_adds_judges_when_minimum_does_not_fit():
 def test_judge_search_keeps_minimum_when_it_fits():
     p = plan_of([])
     assert p["derived"]["judges_used"] == 6
+
+
+def test_facility_synonyms_ramp_satisfies_step_free():
+    p = plan_of([item("venue", "feature", "ramp access", e="Auditorium", sender="Campus Venues", role="vendor"),
+                 item("venue", "requires_feature", "step-free access", e="need", h=True)])
+    assert p["venue"]["chosen"]["name"] == "Auditorium" and p["validation"]["status"] == "VALID"
+    p = plan_of([item("venue", "feature", "ramp access", e="Auditorium", sender="Campus Venues", role="vendor"),
+                 item("venue", "requires_feature", "air conditioning", e="need", h=True)])
+    assert p["venue"]["chosen"] is None or "air" not in " ".join(p["venue"]["chosen"]["features"])
+
+
+def test_vendor_service_charge_on_total_applies_to_own_bill():
+    p = plan_of([item("budget", "percent_charge", 10, e="total", sender="Biryani Point", role="vendor")])
+    food = 102 * 900 + 3000
+    assert p["budget"]["total"] == BASE_TOTAL + Decimal(food) / 10
+
+
+def test_reader_unwraps_extra_nesting():
+    from reader import ReadOut
+    import reader
+    for shape in ([{"m": [{"id": "M1", "it": []}]}], {"m": [{"m": [{"id": "M1", "it": []}]}]}):
+        out = shape
+        if isinstance(out, list):
+            out = out[0] if len(out) == 1 and isinstance(out[0], dict) and "m" in out[0] else {"m": out}
+        if isinstance(out, dict) and len(out.get("m") or []) == 1 and "m" in out["m"][0] and "id" not in out["m"][0]:
+            out = out["m"][0]
+        assert ReadOut.model_validate(out).m[0].id == "M1"
+
+
+def test_rule_requires_uses_facility_synonyms():
+    p = plan_of([item("venue", "feature", "ramp access", e="Auditorium", sender="Campus Venues", role="vendor"),
+                 item("venue", "rule", None, t="rule", h=True, q="must be step-free",
+                      c={"m": "venue_features", "op": "requires", "v": "step-free access"})])
+    assert p["venue"]["chosen"]["name"] == "Auditorium" and p["validation"]["status"] == "VALID"

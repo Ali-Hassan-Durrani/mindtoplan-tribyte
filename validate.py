@@ -1,15 +1,15 @@
 """Deterministic checks. The model never decides validity.
 Status: any FAIL -> INVALID; else any UNRESOLVED -> NEEDS CLARIFICATION; else VALID."""
 import config
-from facts import norm, num
+from facts import norm, num, same_facility
 
 OPS = {
     "eq": lambda a, b: a == b, "ne": lambda a, b: a != b,
     "lt": lambda a, b: a < b, "lte": lambda a, b: a <= b,
     "gt": lambda a, b: a > b, "gte": lambda a, b: a >= b,
     "within": lambda a, b: b[0] <= a <= b[1],
-    "requires": lambda a, b: any(norm(b) in norm(x) for x in a),
-    "excludes": lambda a, b: not any(norm(b) in norm(x) for x in a),
+    "requires": lambda a, b: any(norm(b) in norm(x) or same_facility(norm(b), norm(x)) for x in a),
+    "excludes": lambda a, b: not any(norm(b) in norm(x) or same_facility(norm(b), norm(x)) for x in a),
 }
 OP_ALIASES = {"equals": "eq", "not_equals": "ne", "less_than": "lt", "less_than_or_equal": "lte",
               "greater_than": "gt", "greater_than_or_equal": "gte", "within_interval": "within",

@@ -129,3 +129,23 @@ class View:
                 else:
                     out[norm(f["e"])][f["k"]] = f
         return out
+
+
+# generic facility vocabulary: different words for the same facility (no pack facts)
+FACILITY_GROUPS = [
+    {"step free", "stepfree", "step-free", "ramp", "wheelchair", "ground floor", "accessible", "accessibility",
+     "lift", "elevator", "barrier free", "disabled access"},
+    {"generator", "backup power", "power backup", "standby power", "ups"},
+    {"projector", "screen", "multimedia", "display"},
+    {"air conditioning", "air conditioned", "ac", "a c", "cooling"},
+    {"wifi", "wi fi", "internet", "wireless"},
+    {"parking", "car park"},
+    {"prayer room", "prayer area", "musalla"},
+]
+
+
+def same_facility(need, feat):
+    if need in feat or feat in need:
+        return True
+    has = lambda text, w: f" {w} " in f" {text.replace('-', ' ')} "      # whole words only
+    return any(any(has(need, w) for w in g) and any(has(feat, w) for w in g) for g in FACILITY_GROUPS)
