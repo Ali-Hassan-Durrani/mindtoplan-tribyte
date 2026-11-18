@@ -125,6 +125,13 @@ def write_outputs(state):
          "totals": __import__("llm").Trace(state["trace"]).totals()}, indent=1), encoding="utf-8")
     (config.OUT_DIR / "plan.txt").write_text(plan_text(state), encoding="utf-8")
     (config.OUT_DIR / "trace.txt").write_text(trace_text(state), encoding="utf-8")
+    (config.OUT_DIR / "submission.txt").write_text(submission_text(state), encoding="utf-8")
+
+
+def submission_text(state):
+    """The file to upload: final plan + full trace + totals in one place."""
+    return ("MINDTOPLAN SUBMISSION\n" + "#" * 60 + "\n\n" + plan_text(state) + "\n\n" + "#" * 60 + "\n\n"
+            + trace_text(state))
 
 
 def print_run(state, report):
@@ -152,6 +159,8 @@ def print_run(state, report):
     con.print(t)
     for x in report["rejected"]:
         con.print(f"[red]REJECTED[/red] {x['id']} \"{x['quote']}\" — {x['reason']}", highlight=False)
+    con.print(f"Messages detected in this input: {len(report['new_messages'])} new "
+              f"({', '.join(report['new_messages']) or 'none'})", highlight=False)
     imp = report["impact"]
     con.print(f"Impact: routed={imp.get('routed')} changed={imp.get('changed')} untouched={imp.get('untouched')}")
     status = state["plan"]["validation"]["status"] if state["plan"] else "NO PLAN"

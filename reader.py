@@ -35,7 +35,51 @@ def split_messages(text):
         carry = ""
     if carry:
         merged.append(carry)
-    return merged
+    if len(merged) >= 3:                       # blank lines already separate messages: trust them
+        return [p for b in merged for p in (_split_block(b, table_only=True))]
+    return [p for b in merged for p in _split_block(b)]
+
+
+# Message-start patterns, in priority order. Generic layouts only: numbering, "From:" headers,
+# chat-export timestamps, "Name: text" chat lines. Inside one block we split on the first pattern
+# that starts at least two lines, so "Message 1 / From: / Date:" headers of ONE message stay together.
+_STARTS = [
+    re.compile(r"^\s*(\[\s*\d{1,3}\s*\]|\(\s*\d{1,3}\s*\)|#\s*\d{1,3}\b|\d{1,3}\s*[.)]\s|(message|msg)\s*#?\s*\d{1,3}\b)", re.I),
+    re.compile(r"^\s*(from|sender)\s*:", re.I),
+    re.compile(r"^\s*\[?\d{1,2}[/.-]\d{1,2}([/.-]\d{2,4})?,?\s+\d{1,2}:\d{2}"),           # 12/11/26, 10:30 ...
+    re.compile(r"^\s*(?!(from|to|date|subject|sender|channel|cc|re)\s*:)[A-Za-z][^:\n]{1,60}:\s+\S", re.I),
+]
+_TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{3,}")
+
+
+def _split_block(b, table_only=False):
+    lines = b.split("\n")
+    rows = [l for l in lines if l.strip().startswith("|")]
+    if len(rows) >= 3 and len(rows) >= len(lines) - 1:            # markdown table: one message per data row
+        data = [l for l in rows if not _TABLE_SEP.match(l.strip().strip("|").strip())]
+        header, body = data[0], data[1:]
+        if body and not re.search(r"\d", header):
+            return body
+        return data
+    if table_only:
+        return [b]
+    for pat in _STARTS:
+        starts = [i for i, l in enumerate(lines) if pat.match(l)]
+        if len(starts) < 2:
+            continue
+        preface = lines[:starts[0]]
+        if preface and pat is not _STARTS[1] and not all(_HEADER.match(l) for l in preface):
+            continue          # e.g. "Already ordered:" then a numbered list: one message, not several
+        if pat is _STARTS[3] and len(starts) < 0.6 * len(lines):  # "Name: text" only when it is a chat log
+            continue
+        cuts = ([0] if starts[0] != 0 else []) + starts + [len(lines)]
+        parts = ["\n".join(lines[a:z]).strip() for a, z in zip(cuts, cuts[1:])]
+        parts = [p for p in parts if p]
+        if len(parts) > 1 and starts[0] != 0 and _HEADER.match(parts[0]):
+            parts[1] = parts[0] + "\n" + parts[1]
+            parts = parts[1:]
+        return parts
+    return [b]
 
 
 def text_hash(t):

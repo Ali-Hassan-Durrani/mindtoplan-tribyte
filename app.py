@@ -7,7 +7,7 @@ import streamlit as st
 import config
 from llm import ConfigError, Trace
 from pipeline import load_state, process, reset
-from report import model_list_note, plan_text, rs, trace_text
+from report import model_list_note, plan_text, rs, submission_text, trace_text
 
 st.set_page_config(page_title="MindToPlan", layout="wide")
 COLORS = {"VALID": "#1a7f37", "INVALID": "#cf222e", "NEEDS CLARIFICATION": "#bf8700"}
@@ -42,6 +42,9 @@ with st.sidebar:
         reset()
         st.session_state.pop("last", None)
         st.rerun()
+    if state and state.get("plan"):
+        st.download_button("⬇ Download submission.txt (plan + full trace)", submission_text(state),
+                           "submission.txt", type="primary")
     st.caption("Official command: `python plan.py <messages.txt>`. This page calls the same function.")
 
 if not state or not state.get("plan"):
@@ -181,7 +184,7 @@ with tabs[3]:
                                 "rejected": len(u["rejected"])} for u in state["updates"]]),
                  hide_index=True, width="stretch")
     st.download_button("Download trace.txt", trace_text(state), "trace.txt")
-    for name in ("plan.json", "trace.json"):
+    for name in ("submission.txt", "plan.json", "trace.json"):
         p = Path(config.OUT_DIR) / name
         if p.exists():
             st.download_button(f"Download {name}", p.read_bytes(), name)

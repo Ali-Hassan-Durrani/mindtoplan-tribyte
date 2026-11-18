@@ -40,7 +40,14 @@ def num(v):
     return float(m.group().replace(",", "")) if m else None
 
 
+# one value per event, whatever area/entity label the model attached
+GLOBAL_KEYS = {"students", "team_size", "staff", "duration_min", "budget_total", "start_time", "location",
+               "judges_available", "honorarium", "minutes_per_team", "max_teams_per_judge"}
+
+
 def key_of(f):
+    if f["k"] in GLOBAL_KEYS:
+        return ("*", "", f["k"])
     return (f["a"], norm(f["e"]), f["k"])
 
 
@@ -52,6 +59,11 @@ def resolve(items):
         if f.get("locked"):               # rejected by validation or flagged; stays rejected
             continue
         f["status"], f["reason"] = "accepted", ""
+        if f["t"] in ("suggestion", "question") and f["k"] in GLOBAL_KEYS | VENDOR_KEYS | {"expense"}:
+            f["status"] = "rejected"
+            f["reason"] = (f"'{f['sender']}' only requests/claims a change to {f['k']} ({f['v']}); "
+                           "not a confirmed fact, so the plan keeps the current value")
+            continue
         if f["t"] in NOT_FACT_KINDS:
             f["status"] = "optional" if f["k"] == "optional_cost" else "noted"
             f["reason"] = {"suggestion": "a request/quote, not approved: never counted as spending",
@@ -89,7 +101,7 @@ class View:
         self.facts = active(items)
 
     def get(self, k, a=None):
-        hits = [f for f in self.facts if f["k"] == k and (a is None or f["a"] == a)]
+        hits = [f for f in self.facts if f["k"] == k and (a is None or k in GLOBAL_KEYS or f["a"] == a)]
         return hits[-1] if hits else None
 
     def val(self, k, a=None):

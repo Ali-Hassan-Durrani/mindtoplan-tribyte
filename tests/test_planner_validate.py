@@ -115,3 +115,19 @@ def test_parse_date_and_split():
     assert parse_date("3 Dec") == (12, 3) and parse_date("Jan 15") == (1, 15) and parse_date("") is None
     text = "Msg 1\n\nhello there.\n\n---\nHall A closed\n\n\nThird one!"
     assert split_messages(text) == ["Msg 1\nhello there.", "Hall A closed", "Third one!"]
+
+
+def test_global_fact_cannot_be_changed_by_relabelling():
+    # a student claim labelled with a different area/entity must still hit the authority check
+    items = base_pack() + [item("budget", "budget_total", 2500000, e="event", t="update", sender="Coding club",
+                                role="student", msg="T9", order=999)]
+    resolve(items)
+    assert items[-1]["status"] == "rejected" and "lacks authority" in items[-1]["reason"]
+    assert build_plan(items)["derived"]["budget_total"] == 900000
+
+
+def test_claim_about_core_fact_is_rejected_not_applied():
+    items = base_pack() + [item("event", "students", 300, t="suggestion", sender="Someone", role="individual")]
+    resolve(items)
+    assert items[-1]["status"] == "rejected" and "not a confirmed fact" in items[-1]["reason"]
+    assert build_plan(items)["derived"]["students"] == 90

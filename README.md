@@ -19,9 +19,41 @@ streamlit run app.py             # web viewer + add-message box (same function a
 - Same command for every input. New messages can be a new file, or appended to the pack file (already-seen
   messages are skipped by text hash).
 - Delete `.state/` to start over.
-- After every run: `out/plan.txt`, `out/plan.json`, `out/trace.txt`, `out/trace.json`; the trace is printed too.
-- Model is set only in `.env` (`BASE_URL`, `MODEL_NAME`, `API_KEY`, optional `ALLOWED_MODELS`). Any
-  OpenAI-compatible endpoint works (Gemini, Groq, local Ollama). One model, no fallback.
+- After every run: `out/submission.txt` (plan + full trace, the file to upload), `out/plan.txt`, `out/plan.json`,
+  `out/trace.txt`, `out/trace.json`; the trace is printed too.
+- Model is set only in `.env`, never in code, so it can change after code freeze:
+
+| Variable | Meaning |
+|---|---|
+| `BASE_URL` | OpenAI-compatible endpoint (Gemini, Groq, local Ollama) |
+| `MODEL_NAME` | the one model used for every call (no fallback model) |
+| `API_KEY` | key for that endpoint (never committed: `.env` is gitignored) |
+| `REASONING_EFFORT` | optional, only for "thinking" models (`none`/`low`); leave empty otherwise |
+| `ALLOWED_MODELS` | optional comma list = organizers' small-model list; any other model is refused and the trace header says "yes" instead of "unverified" |
+
+### Model choice
+
+MODEL_CHOICE_PLACEHOLDER
+
+## Judged test run (checklist)
+
+1. `git status` → clean; `git log -1` → matches the submitted hash.
+2. Check `.env`: model, key, `ALLOWED_MODELS` from the organizers' list. Optional: `python smoke.py`.
+3. Reset: `Remove-Item -Recurse -Force .state, out` (PowerShell) or `rm -rf .state out`.
+4. Save the unseen pack as e.g. `pack.txt` → `python plan.py pack.txt`. Check the line
+   "Messages detected in this input: N new" matches the number of messages in the pack.
+5. Each new message → save to its own file (`m1.txt`, `m2.txt`, `m3.txt`) → `python plan.py m1.txt`, etc.
+6. Prediction slip: **only `reading` makes a model call** (1 call per update), unless the message adds a new
+   kind of rule the reader cannot express; then **+1 call tagged with that rule's area**. Impact line shows
+   which areas were recalculated (Python, no calls).
+7. Upload `out/submission.txt` (plan + full trace). Optional UI: `streamlit run app.py`.
+
+## Pack layouts the splitter handles
+
+Blank-line separated messages (with optional "Message 3" / "[3]" header lines), numbered lines without blank
+lines (`1.`, `[2]`, `#3`, `Message 4`), repeated `From:` headers, WhatsApp-export timestamps, `Name: text`
+chat lines, and markdown tables (one message per row). A numbered list inside one email stays one message.
+Tests in `tests/test_split.py`.
 
 ## How it works
 

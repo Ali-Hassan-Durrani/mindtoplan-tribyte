@@ -100,6 +100,8 @@ def call_model(budgeter, trace, area, system, user, message_ids, update_id, max_
             raise
         except Exception as e:  # API error, timeout or invalid JSON: record honestly
             rec["error"] = f"{type(e).__name__}: {str(e)[:300]}"
+            if getattr(e, "status_code", None) in (429, 500, 503) and budgeter.remaining() > 15:
+                time.sleep(3)   # overloaded / rate limited: brief pause before the single retry
         finally:
             rec["duration_s"] = round(time.monotonic() - t0, 2)
             if rec["ok"] or rec["error"]:
