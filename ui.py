@@ -22,7 +22,9 @@ html,body,[data-testid="stAppViewContainer"],[data-testid="stHeader"],[data-test
 [data-testid="stSidebar"]{background:var(--side)!important;border-right:1px solid var(--border)}
 [data-testid="stSidebar"] *,[data-testid="stMarkdownContainer"],[data-testid="stMarkdownContainer"] *,label,p,h1,h2,h3,h4,span,li{color:var(--text);font-family:var(--sans)}
 [data-testid="stCaptionContainer"] *{color:var(--muted)!important}
-.block-container{padding-top:4.2rem;max-width:1240px}
+.block-container,[data-testid="stMainBlockContainer"]{padding-top:4.5rem!important;max-width:1240px}
+[data-testid="stHeader"]{background:transparent!important}
+[data-testid="stIconMaterial"],[data-testid="stIconMaterial"] *,span[class*="material"]{font-family:"Material Symbols Rounded"!important}
 h3{font-size:1.45rem!important;font-weight:500!important;margin:1.4rem 0 .6rem!important}
 [data-testid="stExpander"] details{background:var(--card);border:1px solid var(--border)!important;border-radius:8px}
 [data-testid="stExpander"] summary p{font-family:var(--mono);font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
