@@ -14,7 +14,8 @@ def main():
     if not path.exists():
         sys.exit(f"file not found: {path}")
     text = path.read_text(encoding="utf-8-sig")
-    from pipeline import process
+    from pipeline import PREDICTED, process
+    print(f"Prediction before this run: model calls only in area(s): {', '.join(PREDICTED)}")
     from report import print_run
     try:
         state, report = process(text, source=str(path))

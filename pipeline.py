@@ -33,6 +33,9 @@ ROUTES = {
 }
 
 
+PREDICTED = ["reading"]   # stated before every run; a new kind of rule adds its own area (shown as a mismatch)
+
+
 def _jsonable(o):
     from decimal import Decimal
     if isinstance(o, Decimal):
@@ -258,6 +261,9 @@ def _finish(state, report, trace, budgeter, calls_before):
     run_recs = trace.records[calls_before:]
     report["calls"] = len(run_recs)
     report["call_areas"] = sorted({r["area"] for r in run_recs})
+    # predict-then-verify: the routing rule says only 'reading' calls the model (if anything is new)
+    report["predicted_areas"] = PREDICTED if report["new_messages"] else []
+    report["prediction_ok"] = report["call_areas"] == report["predicted_areas"]
     report["tokens"] = trace.totals(run_recs)
     report["seconds"] = round(budgeter.elapsed(), 2)
     state["trace"] = trace.records

@@ -18,7 +18,7 @@ def rs(x):
 def model_list_note():
     if config.ALLOWED_MODELS:
         return f"model on organizers' small-model list: yes (ALLOWED_MODELS={', '.join(config.ALLOWED_MODELS)})"
-    return "model on organizers' small-model list: unverified"
+    return "small-model list: none published by the organizers; single model chosen by the team"
 
 
 def plan_text(state):
@@ -169,6 +169,10 @@ def print_run(state, report):
         con.print(f"[red]REJECTED[/red] {x['id']} \"{x['quote']}\" — {x['reason']}", highlight=False)
     con.print(f"Messages detected in this input: {len(report['new_messages'])} new "
               f"({', '.join(report['new_messages']) or 'none'})", highlight=False)
+    if "prediction_ok" in report:
+        mark = "✓ matches" if report["prediction_ok"] else "✗ differs"
+        con.print(f"Prediction check: predicted {report['predicted_areas']} → actual {report['call_areas']} {mark}",
+                  highlight=False)
     imp = report["impact"]
     con.print(f"Impact: routed={imp.get('routed')} changed={imp.get('changed')} untouched={imp.get('untouched')}")
     status = state["plan"]["validation"]["status"] if state["plan"] else "NO PLAN"
