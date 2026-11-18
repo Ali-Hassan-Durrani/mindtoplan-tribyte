@@ -141,6 +141,11 @@ def process(text, source="input"):
                         "order": _order_key(pm.date, state["next_order"]) if mode == "full"
                         else 20_000 + state["next_order"]}
                 _normalize(item)
+                if item["k"] == "rule" or item["t"] == "rule":
+                    if pm.inj:      # an instruction aimed at the system is never a planning rule
+                        item["t"], item["k"] = "irrelevant", "other"
+                    elif config.AUTHORITY.get(item["role"], 0) < config.AUTHORITY["vendor"]:
+                        item["t"] = "suggestion"     # a request from someone without authority is not binding
                 new_items.append(item)
             _venue_prices(new_items, m["id"])
 

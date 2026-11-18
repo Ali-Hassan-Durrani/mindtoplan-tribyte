@@ -1,5 +1,6 @@
 """The only place that talks to a model. Every call goes through the Budgeter and lands in the trace."""
 import json
+import re
 import time
 from datetime import datetime
 
@@ -60,8 +61,49 @@ def parse_json(text):
     if t.startswith("```"):
         t = t.split("\n", 1)[1] if "\n" in t else t[3:]
     start = min([i for i in (t.find("{"), t.find("[")) if i >= 0], default=0)
-    value, _ = json.JSONDecoder().raw_decode(t[start:])
-    return value
+    try:
+        value, _ = json.JSONDecoder().raw_decode(t[start:])
+        return value
+    except json.JSONDecodeError:
+        pass
+    # small models sometimes drop or misplace a bracket: repair each {"id": ...} record on its own
+    starts = [m.start() for m in re.finditer(r'\{\s*"id"\s*:', t)]
+    if not starts:
+        value, _ = json.JSONDecoder().raw_decode(_balance(t[start:]))
+        return value
+    records = []
+    for a, z in zip(starts, starts[1:] + [len(t)]):
+        chunk = t[a:z].rstrip().rstrip(",").rstrip()
+        rec, _ = json.JSONDecoder().raw_decode(_balance(chunk))
+        records.append(rec)
+    return {"m": records}
+
+
+def _balance(s):
+    """Repair bracket structure only: insert missing closers, add closers left open at the end."""
+    out, stack, in_str, esc = [], [], False, False
+    pair = {"{": "}", "[": "]"}
+    for ch in s:
+        if in_str:
+            out.append(ch)
+            esc = (ch == "\\" and not esc)
+            if ch == '"' and not esc:
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in pair:
+            stack.append(pair[ch])
+        elif ch in "}]":
+            while stack and stack[-1] != ch:
+                out.append(stack.pop())
+            if not stack:
+                break                       # extra closer: the JSON value is complete
+            stack.pop()
+        out.append(ch)
+        if not stack and ch in "}]":
+            break
+    return "".join(out) + "".join(reversed(stack))
 
 
 def _client(timeout):
