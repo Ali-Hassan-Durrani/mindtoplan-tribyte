@@ -206,3 +206,22 @@ def test_event_end_time_becomes_rule_not_block_anchor(script):
     rules = [c for c in state["plan"]["validation"]["checks"] if c["name"].startswith("rule")]
     assert rules and rules[0]["result"] in ("PASS", "UNRESOLVED")
     assert not any("matches no schedule block" in c["detail"] for c in state["plan"]["validation"]["checks"])
+
+
+def test_unrepairable_record_is_skipped_not_fatal():
+    from llm import parse_json
+    out = parse_json('{"m":[{"id":"M1","it":[]},{"id":"M2","it":[{"k":"a","v":"x}]},{"id":"M3","it":[]}]}')
+    assert [r["id"] for r in out["m"]][0] == "M1" and "M3" in [r["id"] for r in out["m"]]
+
+
+def test_unread_message_is_retried_next_run(script, monkeypatch):
+    pipeline.process("PACK all facts")
+    real = pipeline.read_messages
+    monkeypatch.setattr(pipeline, "read_messages",
+                        lambda msgs, *a: {k: v for k, v in real(msgs, *a).items() if k != msgs[-1]["id"]})
+    script["cricket"] = ("Friend", "individual", [], False)
+    state, rep = pipeline.process("cricket score?")
+    assert "could not be read" in " ".join(rep["notes"]) and len(state["messages"]) == 1
+    monkeypatch.setattr(pipeline, "read_messages", real)
+    state, rep = pipeline.process("cricket score?")
+    assert rep["new_messages"] == ["M2"] and state["messages"][-1]["status"] == "irrelevant"

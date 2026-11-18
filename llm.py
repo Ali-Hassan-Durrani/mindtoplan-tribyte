@@ -74,8 +74,13 @@ def parse_json(text):
     records = []
     for a, z in zip(starts, starts[1:] + [len(t)]):
         chunk = t[a:z].rstrip().rstrip(",").rstrip()
-        rec, _ = json.JSONDecoder().raw_decode(_balance(chunk))
-        records.append(rec)
+        try:
+            rec, _ = json.JSONDecoder().raw_decode(_balance(chunk))
+            records.append(rec)
+        except json.JSONDecodeError:
+            continue          # an unrepairable record is skipped; its message is re-read on the next run
+    if not records:
+        raise json.JSONDecodeError("no readable message records", t, 0)
     return {"m": records}
 
 

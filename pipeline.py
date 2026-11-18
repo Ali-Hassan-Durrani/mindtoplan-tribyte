@@ -124,7 +124,9 @@ def process(text, source="input"):
         for m in new:
             pm = parsed.get(m["id"])
             if pm is None:
-                m["status"], m["reason"] = "needs review", "model returned nothing for this message"
+                # not read (e.g. a malformed record was skipped): not marked as seen, so the next run reads it
+                state["messages"].remove(m)
+                report["notes"].append(f"{m['id']} could not be read this run; run the command again to read it")
                 continue
             m.update(sender=pm.frm, role=pm.role, date=pm.date)
             if pm.inj:
