@@ -87,6 +87,8 @@ def validate(plan, view):
                      f"({d['students']} students + {d['staff']} staff + {d['judges_used']} judges)")
     if d["students"] is None:
         add("correct figures", "food", "UNRESOLVED", "student count unknown")
+    elif not probs and food and food.get("diet_issues"):
+        add("correct figures", "food", "UNRESOLVED", "; ".join(food["diet_issues"]))
     else:
         add("correct figures", "food", "FAIL" if probs else "PASS",
             "; ".join(probs) or f"headcount {d['headcount']}, teams {d['teams']}, food qty {food['qty'] if food else '-'}")
@@ -118,7 +120,12 @@ def validate(plan, view):
         for br in s["breaks"]:
             if br["hard"] and br["name"].lower() not in names:
                 sp.append(f"missing required break {br['name']}")
-        add("schedule valid", "schedule", "FAIL" if sp else "PASS",
+        issues = s.get("issues") or {}
+        sp += issues.get("fail", [])
+        if not sp and issues.get("unresolved"):
+            add("schedule valid", "schedule", "UNRESOLVED", "; ".join(issues["unresolved"]))
+        else:
+            add("schedule valid", "schedule", "FAIL" if sp else "PASS",
             "; ".join(sp) or f"{len(s['blocks'])} blocks = {s['total_min']} min; breaks: "
             + (", ".join(f"{x['name']} {x['min']}m" for x in s["breaks"]) or "none required"))
     # 5. enough judges

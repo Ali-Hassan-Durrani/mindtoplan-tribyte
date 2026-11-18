@@ -1,5 +1,6 @@
 """Derived numbers and the five area planners. Pure Python, no model calls, money in Decimal."""
 import math
+import re
 from decimal import Decimal
 
 import config
@@ -28,6 +29,11 @@ def derive(v):
     d["staff"] = d["staff"] or 0
     s, ts = d["students"], d["team_size"]
     d["teams"] = math.ceil(s / ts) if s and ts else None
+    # judges who leave before judging ends cannot judge
+    d["judges_leaving"] = int(sum(num(f["v"]) or 0 for f in v.all("judges_leaving_early")))
+    d["judges_confirmed"] = d["judges_available"]
+    if d["judges_available"] is not None and d["judges_leaving"]:
+        d["judges_available"] = max(d["judges_available"] - d["judges_leaving"], 0)
     ja, mx = d["judges_available"], d["max_teams_per_judge"]
     if d["teams"] and mx:
         d["judges_needed"] = math.ceil(d["teams"] / mx)
@@ -130,25 +136,120 @@ def schedule_plan(v, d):
     seq += [(o[0].capitalize(), o[1], o[2]) for o in others]
     seq += [("Hacking (part 2)", h2, None), ("Judging", judging_m, None), ("Closing", closing[1], closing[2])]
     st = v.get("start_time")
-    start = 0
-    if st:
-        try:
-            hh, mm = str(st["v"]).split(":")[:2]
-            start = int(hh) * 60 + int(mm[:2])
-        except ValueError:
-            st = None
-    blocks, t = [], start
-    for name, m, f in seq:
-        if m <= 0:
-            continue
-        blocks.append({"name": name, "start": t, "end": t + m, "min": m, "evidence": ev(f)})
-        t += m
+    start = clock(st["v"]) if st else None
+    if start is None:
+        st, start = None, 0
+    anchors = [(f, clock(f["v"])) for f in v.all("at_time")]
+    issues = {"fail": [], "unresolved": []}
+    if anchors and st:
+        blocks, hacking = _anchored(seq, anchors, start, total, issues)
+    else:
+        if anchors:
+            issues["unresolved"].append("fixed clock times given but the event start time is unknown")
+        blocks, t = [], start
+        for name, m, f in seq:
+            if m <= 0:
+                continue
+            blocks.append({"name": name, "start": t, "end": t + m, "min": m, "evidence": ev(f)})
+            t += m
     fmt = (lambda x: f"{x // 60:02d}:{x % 60:02d}") if st else (lambda x: f"T+{x // 60}:{x % 60:02d}")
     for b in blocks:
         b["time"] = f"{fmt(b['start'])}-{fmt(b['end'])}"
-    return {"blocks": blocks, "total_min": t - start, "target_min": total, "hacking_min": max(hacking, 0),
-            "meal_min": meal[1], "judging_min": judging_m, "start_min": start, "end_min": t,
+    end = blocks[-1]["end"] if blocks else start
+    return {"blocks": blocks, "total_min": end - start, "target_min": total, "hacking_min": max(hacking, 0),
+            "meal_min": meal[1], "judging_min": judging_m, "start_min": start, "end_min": end, "issues": issues,
             "breaks": [{"name": b[0], "min": b[1], "hard": b[2]["h"], "evidence": ev(b[2])} for b in breaks]}
+
+
+def clock(s):
+    """'13:30', '1:30 pm', '1 pm' -> minutes after midnight, or None."""
+    s = str(s or "").strip().lower()
+    m = re.match(r"^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", s)
+    if not m:
+        return None
+    h, mi = int(m.group(1)), int(m.group(2) or 0)
+    if m.group(3) == "pm" and h < 12:
+        h += 12
+    if m.group(3) == "am" and h == 12:
+        h = 0
+    return h * 60 + mi if h < 24 and mi < 60 else None
+
+
+def _words(s):
+    return {w for w in norm(s).split() if len(w) > 2 and w not in ("break", "time", "session", "the", "and", "for")} | \
+        ({"meal", "lunch", "food"} if any(x in norm(s) for x in ("lunch", "meal", "food", "khana")) else set())
+
+
+def _diet_words(s):
+    generic = {"meal", "meals", "lunch", "food", "boxes", "option", "pack", "wala", "khana", "dinner", "people"}
+    return {w for w in norm(s).split() if len(w) > 2 and w not in generic}
+
+
+def _diet_match(need, option_words):
+    """'veg' matches 'vegetarian': whole words or one a prefix of the other."""
+    return any(a.startswith(b) or b.startswith(a) for a in _diet_words(need) for b in option_words)
+
+
+def _anchored(seq, anchors, start, total, issues):
+    """Pin blocks with a stated clock time; opening at the start, judging+closing at the end; other breaks
+    float from the middle; hacking fills every gap. Overlaps or out-of-window times are reported."""
+    end = start + total
+    items = [{"name": n, "min": m, "f": f} for n, m, f in seq if m > 0 and not n.startswith("Hacking")]
+    for f, t in anchors:
+        hit = next((it for it in items if _words(it["name"]) & _words(f["e"])), None)
+        if hit is None:
+            issues["unresolved"].append(f"time for '{f['e']}' ({f['v']}) matches no schedule block")
+        elif t is None:
+            issues["unresolved"].append(f"cannot read time '{f['v']}' for {f['e']}")
+        else:
+            hit["at"], hit["anchor"] = t, f
+    pinned = []
+    by = {it["name"].lower(): it for it in items}
+    clos, judg, opn = by.get("closing"), by.get("judging"), by.get("opening")
+    if opn and "at" not in opn:
+        opn["at"] = start
+    if clos and "at" not in clos:
+        clos["at"] = end - clos["min"]
+    pinned = [it for it in items if "at" in it]
+    if judg and "at" not in judg:
+        # judging goes in the latest free slot before closing that does not clash with a fixed-time block
+        t = (clos["at"] if clos else end) - judg["min"]
+        while t >= start and any(t < p["at"] + p["min"] and p["at"] < t + judg["min"] for p in pinned):
+            t = min(p["at"] for p in pinned if t < p["at"] + p["min"] and p["at"] < t + judg["min"]) - judg["min"]
+        judg["at"] = t
+        pinned.append(judg)
+    floating = [it for it in items if "at" not in it and it is not judg]
+    mid = start + total // 2
+    for it in floating:   # free gap closest to mid-event that fits the block
+        taken = sorted((p["at"], p["at"] + p["min"]) for p in pinned)
+        gaps, t0 = [], start
+        for a, z in taken:
+            if a > t0:
+                gaps.append((t0, a))
+            t0 = max(t0, z)
+        gaps.append((t0, end))
+        fits = [max(g0, min(mid, g1 - it["min"])) for g0, g1 in gaps if g1 - g0 >= it["min"]]
+        it["at"] = min(fits, key=lambda x: abs(x - mid)) if fits else end
+        pinned.append(it)
+    pinned.sort(key=lambda it: it["at"])
+    blocks, t, n = [], start, 0
+    for it in pinned:
+        if it["at"] < start or it["at"] + it["min"] > end:
+            issues["fail"].append(f"{it['name']} at {it['at'] // 60:02d}:{it['at'] % 60:02d} is outside the event "
+                                  f"window {start // 60:02d}:{start % 60:02d}-{end // 60:02d}:{end % 60:02d}")
+        if it["at"] < t:
+            issues["fail"].append(f"{it['name']} overlaps the previous block")
+        elif it["at"] > t:
+            n += 1
+            blocks.append({"name": f"Hacking (part {n})", "start": t, "end": it["at"], "min": it["at"] - t, "evidence": None})
+        blocks.append({"name": it["name"], "start": it["at"], "end": it["at"] + it["min"], "min": it["min"],
+                       "evidence": ev(it.get("anchor") or it["f"])})
+        t = max(t, it["at"] + it["min"])
+    if t < end:
+        n += 1
+        blocks.append({"name": f"Hacking (part {n})", "start": t, "end": end, "min": end - t, "evidence": None})
+    hacking = sum(b["min"] for b in blocks if b["name"].startswith("Hacking"))
+    return blocks, hacking
 
 
 def judging_plan(d):
@@ -178,6 +279,31 @@ def budget_plan(v, d, venue, food):
         lines.append({"item": f"Judge honorarium: {d['judges_used']} x Rs {int(d['honorarium']):,}",
                       "amount": D(d["honorarium"]) * d["judges_used"], "type": "estimated",
                       "evidence": ev(v.get("honorarium", "judging"))})
+    # costs that scale with teams / people
+    for k, n, unit in (("cost_per_team", d["teams"], "teams"), ("cost_per_student", d["students"], "students"),
+                       ("cost_per_person", d["headcount"], "people")):
+        for f in v.all(k):
+            if n:
+                lines.append({"item": f"{f['e'] or k.replace('_', ' ')}: {int(n)} {unit} x Rs {int(num(f['v']) or 0):,}",
+                              "amount": D(num(f["v"])) * int(n), "type": "estimated", "evidence": ev(f)})
+    # percentage charges (tax, service charge) on a named line or on everything so far
+    base_lines = list(lines)
+    for f in v.all("percent_charge"):
+        pct, target = num(f["v"]) or 0, norm(f["e"])
+        if target in ("", "all", "total", "event", "overall", "everything", "bill"):
+            base = [l for l in base_lines if l["type"] != "committed"]
+        else:
+            words = {w for w in target.split() if len(w) > 2}
+            base = [l for l in base_lines if words & set(norm(l["item"]).split())]
+        amount = sum((l["amount"] for l in base), Decimal(0)) * Decimal(str(pct)) / 100
+        lines.append({"item": f"{pct:g}% {f['e'] or 'charge'} on " + (", ".join(l["item"] for l in base) or "nothing matched"),
+                      "amount": amount.quantize(Decimal("1")), "type": "estimated", "evidence": ev(f)})
+    reserve = v.get("reserve_pct")
+    if reserve and d["budget_total"]:
+        pct = num(reserve["v"]) or 0
+        lines.append({"item": f"Reserve kept unspent ({pct:g}% of budget)",
+                      "amount": (D(d["budget_total"]) * Decimal(str(pct)) / 100).quantize(Decimal("1")),
+                      "type": "reserve", "evidence": ev(reserve)})
     total = sum((l["amount"] for l in lines), Decimal(0))
     cap = D(d["budget_total"]) if d["budget_total"] is not None else None
     remaining = cap - total if cap is not None else None
@@ -198,7 +324,10 @@ def build_plan(items):
     v.optional = [f for f in items if f.get("status") == "optional" and num(f["v"]) is not None]
     d = derive(v)
     venues_ok, venues_rej, needs = venue_candidates(v, d)
-    foods = food_options(v)
+    diets = [f["e"] for f in v.all("diet_count")]
+    # options that exist for a dietary need are not candidates for the main meal
+    foods = [o for o in food_options(v) if not any(_diet_match(x, _diet_words(o["name"]) | _diet_words(o["tier"])) for x in diets)] \
+        or food_options(v)
     qty_f = v.get("order_qty", "food")
     attempts, first = [], None
     for food in foods or [None]:
@@ -219,8 +348,20 @@ def assemble(v, d, venue, venues_ok, venues_rej, needs, food, qty_f):
     food_sec = None
     if food:
         qty = int(num(qty_f["v"])) if qty_f else dd["headcount"]
-        food_sec = {**food, "qty": qty, "cost": D(qty * food["pph"] + (food["delivery"] or 0)),
-                    "people_to_feed": dd["headcount"], "qty_source": ev(qty_f) if qty_f else "computed: headcount",
+        # dietary needs: N people get a matching option, the rest the main meal
+        splits, diet_issues = [], []
+        for f in v.all("diet_count"):
+            n = int(num(f["v"]) or 0)
+            opt = next((o for o in food_options(v) if _diet_match(f["e"], _diet_words(o["name"]) | _diet_words(o["tier"]))), None)
+            if opt is None:
+                diet_issues.append(f"{n} {f['e']} meals needed but no {f['e']} option was quoted")
+            elif n:
+                splits.append({"diet": f["e"], "qty": n, "name": opt["name"], "pph": opt["pph"], "evidence": ev(f)})
+        main_qty = max(qty - sum(s["qty"] for s in splits), 0)
+        cost = main_qty * food["pph"] + sum(s["qty"] * s["pph"] for s in splits) + (food["delivery"] or 0)
+        food_sec = {**food, "qty": qty, "main_qty": main_qty, "splits": splits, "diet_issues": diet_issues,
+                    "cost": D(cost), "people_to_feed": dd["headcount"],
+                    "qty_source": ev(qty_f) if qty_f else "computed: headcount",
                     "alternatives": [{"name": f["name"], "pph": f["pph"]} for f in food_options(v) if f["name"] != food["name"]]}
     sched = schedule_plan(v, dd)
     return {

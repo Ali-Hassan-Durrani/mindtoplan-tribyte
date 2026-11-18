@@ -27,6 +27,9 @@ ROUTES = {
     "honorarium": ("judging", "budget"), "minutes_per_team": ("judging", "schedule"),
     "max_teams_per_judge": ("judging", "venue", "food", "budget", "schedule"),
     "late_min": ("judging", "schedule"), "expense": ("budget",), "optional_cost": ("budget",),
+    "at_time": ("schedule",), "diet_count": ("food", "budget"), "judges_leaving_early": AREAS,
+    "cost_per_team": ("budget",), "cost_per_student": ("budget",), "cost_per_person": ("budget",),
+    "percent_charge": ("budget",), "reserve_pct": ("budget",),
 }
 
 
@@ -136,6 +139,7 @@ def process(text, source="input"):
                         else 20_000 + state["next_order"]}
                 _normalize(item)
                 new_items.append(item)
+            _venue_prices(new_items, m["id"])
 
         # escape hatch for rules the reader could not express (limited by the Budgeter)
         for it in new_items:
@@ -172,10 +176,20 @@ def process(text, source="input"):
         return _finish(state, report, trace, budgeter, calls_before)
 
 
+def _venue_prices(items, msg_id):
+    """An 'expense' for an entity the same message gives a seating capacity is that venue's price."""
+    venues = {i["e"].strip().lower() for i in items if i["msg"] == msg_id and i["k"] == "capacity"}
+    for i in items:
+        if i["msg"] == msg_id and i["k"] == "expense" and i["e"].strip().lower() in venues:
+            i["a"], i["k"] = "venue", "price"
+
+
 def _normalize(item):
     """Fix common key misuse by a small model (generic, not pack-specific)."""
     if item["t"] == "irrelevant":
         item["k"] = "other"
+    elif item["k"] == "expense" and "deliver" in item["e"].lower():
+        item["a"], item["k"], item["e"] = "food", "delivery_fee", "delivery"   # a caterer's delivery charge
     elif item["t"] == "rule" and item["c"] and item["k"] not in ("requires_feature", "break_min", "activity_min"):
         item["k"] = "rule"                       # a checkable requirement is a rule, whatever key was used
     elif item["k"] == "feature" and (item["t"] == "rule" or item["h"] or

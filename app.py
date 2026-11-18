@@ -182,8 +182,12 @@ with tabs[1]:
     with c2:
         f = plan["food"]
         html('<div class="card"><div class="h">🍱 Food</div>' + (
-            f"<b>{f['qty']} × {e(f['name'])}</b> @ {rs(f['pph'])} + delivery {rs(f['delivery'])} = <b>{rs(f['cost'])}</b>"
-            f"<div class='muted'>People to feed: {f['people_to_feed']} = {int(d['students'] or 0)} students + "
+            (f"<b>{f['main_qty']} × {e(f['name'])}</b> @ {rs(f['pph'])}"
+             + "".join(f"<br><b>{x['qty']} × {e(x['name'])}</b> @ {rs(x['pph'])} {chip(x['diet'], 'ok')}" for x in f["splits"])
+             + f"<br>+ delivery {rs(f['delivery'])} = <b>{rs(f['cost'])}</b>"
+             if f.get("splits") else
+             f"<b>{f['qty']} × {e(f['name'])}</b> @ {rs(f['pph'])} + delivery {rs(f['delivery'])} = <b>{rs(f['cost'])}</b>")
+            + f"<div class='muted'>People to feed: {f['people_to_feed']} = {int(d['students'] or 0)} students + "
             f"{int(d['staff'])} staff + {d['judges_used']} judges</div>"
             + "".join(f"<div class='muted'>◦ alternative: {e(a['name'])} @ {rs(a['pph'])}</div>" for a in f["alternatives"])
             if f else "No food plan") + "</div>")

@@ -37,7 +37,7 @@ Why:
 | 4 | Accept new messages after the first run and update the existing plan | ✅ Done | Only messages with an unseen text hash are processed; previous facts and plan are reused |
 | 5 | A conflicting message keeps the plan valid and the reason goes in the trace | ✅ Done | Transactional update in `pipeline._transaction`; `REJECTED …` lines in the trace, plan and UI |
 | 6 | Plan covers venue, schedule, food, judging, budget | ✅ Done | `planner.py` |
-| 7 | Respect every stated constraint, including unseen kinds | ✅ Mostly (see section 9) | Generic `{metric, op, value}` rules + one model call for a rule the reader could not express; unknown rule → NEEDS CLARIFICATION, never VALID |
+| 7 | Respect every stated constraint, including unseen kinds | ✅ Done for the kinds in section 9 | Generic `{metric, op, value}` rules + one model call for a rule the reader could not express; unknown rule → NEEDS CLARIFICATION, never VALID |
 | 8 | Full run within 2 min | ✅ Done (~4–5 s) | `Budgeter` hard limit 120 s with a 5 s safety margin |
 | 9 | Update: max 5 model calls, within 1 min | ✅ Done (1 call, ~1–3 s) | `Budgeter` caps calls (retries count) and time |
 | 10 | UI shows plan, trace and rejected messages clearly | ✅ Done | Terminal output (rich) + Streamlit page `streamlit run app.py` |
@@ -45,7 +45,7 @@ Why:
 | 12 | Six output checks: correct figures, within budget, venue fits, schedule valid, enough judges, all areas covered | ✅ Done | `validate.py`, printed as PASS / FAIL / UNRESOLVED |
 | 13 | Clean `git status` at the test run | ✅ Done | `.gitignore` covers `.env`, `.state/`, `out/`, caches |
 | 14 | Bring your own model, any provider | ✅ Done | Any OpenAI-compatible endpoint via `.env` |
-| 15 | Small-model bonus | ⚠️ Unverified | The organizers' list has not been seen yet; put it in `ALLOWED_MODELS` |
+| 15 | Small-model bonus | Our choice | No list published; we use the small `gemini-3.5-flash-lite` |
 
 ---
 
@@ -164,22 +164,28 @@ unseen-style pack, 2 rounds, one model at a time):
 
 ---
 
-## 9. What is NOT fully covered (honest limits / risks for the unseen pack)
+## 9. Constraint kinds added for unseen packs, and remaining limits
 
-| Gap | What happens today | Risk |
+Added (reader keys → Python planner/validator, tested in `tests/test_features.py` and with the real model on
+`samples/features_test.txt`):
+
+| Constraint kind | Example | How it is handled |
 |---|---|---|
-| Time-anchored events ("Zuhr prayer at 1:30 pm", "lunch must start at 1 pm") | The break is included with the right length but placed by our own order, not at that clock time | Schedule check could be judged wrong |
-| Percentage charges ("+16% tax", "10% service charge", "keep 10% reserve") | Not modelled unless the reader turns it into a rupee amount | Budget figure could be off |
-| Per-team or per-person extras ("kit Rs 500 per team") | Only fixed-amount expenses are modelled | Budget could be off |
-| Dietary splits ("20 vegetarian meals") | One meal option for everyone | Food check could be judged incomplete |
-| Judges leaving early or available only part of the time | Only "late by N min" is modelled | Judging check |
-| Several rooms combined, or a venue with a time limit | One venue; time limits only via a generic rule on `end_min` | Venue check |
-| Rules outside the metric list | Plan shows NEEDS CLARIFICATION (honest, but not VALID) | Lost output points |
-| Organizers' small-model list | Unknown → "unverified" | Bonus |
+| Fixed clock time | "Zuhr prayer at 12:30" | `at_time`: the block is pinned at that time; judging moves to the latest free slot before closing; hacking fills the gaps; overlap or outside the event window → FAIL; no start time → NEEDS CLARIFICATION |
+| Percentage charge | "+16% tax on hall rent" | `percent_charge`: % of the matching budget line (or of all planned costs) |
+| Reserve | "keep 5% of budget unspent" | `reserve_pct`: a reserve line counted in the total, so within-budget enforces it |
+| Per-team / per-student / per-person cost | "kit Rs 1,500 per team" | `cost_per_team` / `cost_per_student` / `cost_per_person` × teams / students / headcount |
+| Dietary split | "12 need vegetarian meals" | `diet_count`: N meals from the matching option (veg ↔ vegetarian), the rest the main meal; no matching option → NEEDS CLARIFICATION |
+| Judges leaving early | "2 judges leave before judging ends" | `judges_leaving_early`: subtracted from available judges before allocation |
 
-These are the best candidates for new features.
+Robustness added at the same time: venue prices mislabelled as expenses are corrected, a caterer's
+delivery charge is a food fee, stray text after the model's JSON is ignored.
 
----
+Still not modelled: several rooms combined; judges available only in a time window (other than late /
+leaving early); rules outside the metric list (shown as NEEDS CLARIFICATION, never VALID).
+
+**Small-model bonus:** the organizers did not publish a list; the model choice is ours.
+We use `gemini-3.5-flash-lite`, a small "Flash-Lite" tier model.
 
 ## 10. Everything done in this session (chronological)
 
@@ -199,7 +205,8 @@ These are the best candidates for new features.
 14. Fixed a false-claim bug (a relabelled "budget is now Rs 900,000" was accepted) + tests.
 15. Model benchmark → `gemini-3.5-flash-lite` (14/14, 0 failures).
 16. UI v2: light/dark toggle, animations, status hero, step guide, check cards, "Why?" evidence, schedule timeline, budget bar, message chips, trace cards, before→after diff.
-17. README: model settings, benchmark, judged-run checklist, splitter layouts. **35 tests pass.**
+17. README: model settings, benchmark, judged-run checklist, splitter layouts.
+18. New constraint kinds: clock times, % charges, reserve, per-team/person costs, dietary splits, judges leaving early; tolerant JSON parsing; venue-price/delivery normalization. **47 tests pass.**
 
 ---
 

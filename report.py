@@ -46,7 +46,13 @@ def plan_text(state):
     L += ["", "FOOD"]
     f = p["food"]
     if f:
-        L.append(f"  {f['qty']} x {f['name']} @ {rs(f['pph'])} + delivery {rs(f['delivery'])} = {rs(f['cost'])}")
+        if f.get("splits"):
+            L.append(f"  {f['main_qty']} x {f['name']} @ {rs(f['pph'])}")
+            for sp in f["splits"]:
+                L.append(f"  {sp['qty']} x {sp['name']} @ {rs(sp['pph'])} ({sp['diet']})")
+            L.append(f"  + delivery {rs(f['delivery'])} = {rs(f['cost'])} for {f['qty']} people")
+        else:
+            L.append(f"  {f['qty']} x {f['name']} @ {rs(f['pph'])} + delivery {rs(f['delivery'])} = {rs(f['cost'])}")
         L.append(f"  People to feed: {f['people_to_feed']} ({d['students']} students + {d['staff']} staff + "
                  f"{d['judges_used']} judges)")
         for a in f["alternatives"]:

@@ -126,10 +126,10 @@ area: event|venue|schedule|food|judging|budget. kind: fact|update|suggestion|que
 Use ONLY these keys (numbers as plain numbers, money in rupees, times in minutes):
 event: students, team_size, staff, duration_min, budget_total, start_time("HH:MM" 24h), location
 venue (e=venue name): capacity, price, feature(v=facility it has), lacks_feature(v=facility it lacks or is broken), unavailable(v=true); requires_feature(e="need",v=facility) when the event needs a facility
-schedule: break_min(e=break name, h=true if required), activity_min(e=activity name)
-food (e=option name, lower case without price): price_per_head, delivery_fee(e=option, or e="delivery" if for the whole order), tier(v=standard for the normal/main meal, basic for a cheaper/lighter one, premium), order_qty(only if a vendor states a quantity they will supply)
-judging: judges_available, honorarium(per judge), minutes_per_team, max_teams_per_judge, late_min(e=who)
-budget (e=item name): expense(already spent/ordered/committed), optional_cost(a request, idea or quote not approved)
+schedule: break_min(e=break name, h=true if required), activity_min(e=activity name), at_time(e=break/activity name, v="HH:MM" 24h fixed clock time it must start)
+food (e=option name, lower case without price): price_per_head, delivery_fee(e=option, or e="delivery" if for the whole order), tier(v=standard for the normal/main meal, basic for a cheaper/lighter one, premium), order_qty(only if a vendor states a quantity they will supply), diet_count(e=diet e.g. vegetarian, v=number of people needing it)
+judging: judges_available, honorarium(per judge), minutes_per_team, max_teams_per_judge, late_min(e=who), judges_leaving_early(v=how many judges leave before judging ends)
+budget (e=item name): expense(money the organizers already spent/ordered; NEVER a vendor's price or quote), optional_cost(a request, idea or quote not approved), cost_per_team, cost_per_student, cost_per_person(per person on site), percent_charge(e=what it applies to: venue|food|all|item name, v=percent number, e.g. tax), reserve_pct(v=percent of budget to keep unspent)
 Any other requirement: k=rule, t=rule, h=true, q=the requirement, and if possible c={{"m":metric,"op":"eq|ne|lt|lte|gt|gte|requires|excludes|within","v":value}} with metric from: {METRICS}.
 Requests, ideas and quotes that nobody approved are t=suggestion. A changed price or number is t=update with the same e and k as before. Mixed Roman Urdu/English is normal: read meaning (ab=now, pehle=before, hoga=will be, wala=one/option, hai=is)."""
 

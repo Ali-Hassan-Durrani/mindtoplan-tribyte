@@ -54,6 +54,16 @@ class Trace:
         return t
 
 
+def parse_json(text):
+    """First complete JSON value in the reply; ignores code fences and trailing text (e.g. a stray '.')."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[1] if "\n" in t else t[3:]
+    start = min([i for i in (t.find("{"), t.find("[")) if i >= 0], default=0)
+    value, _ = json.JSONDecoder().raw_decode(t[start:])
+    return value
+
+
 def _client(timeout):
     if not (config.API_KEY and config.BASE_URL and config.MODEL_NAME):
         raise ConfigError("Missing model settings: set BASE_URL, MODEL_NAME and API_KEY in .env "
@@ -92,7 +102,7 @@ def call_model(budgeter, trace, area, system, user, message_ids, update_id, max_
                 rec["input_tokens"] = resp.usage.prompt_tokens
                 rec["output_tokens"] = resp.usage.completion_tokens
                 rec["total_tokens"] = resp.usage.total_tokens
-            parsed = json.loads(rec["output"])
+            parsed = parse_json(rec["output"])
             rec["ok"] = True
             return parsed
         except ConfigError:

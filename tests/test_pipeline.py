@@ -170,3 +170,10 @@ def test_broken_facility_removes_feature(script):
                                     "t": "update", "h": False, "q": "Auditorium projector broken"}], False)
     state, rep = pipeline.process("Auditorium projector broken")
     assert rep["rejected"] and state["plan"]["validation"]["status"] == "VALID"   # no venue left: keep last plan
+
+
+def test_parse_json_tolerates_trailing_text_and_fences():
+    from llm import parse_json
+    assert parse_json('{"m":[1]}.') == {"m": [1]}
+    assert parse_json('[{"id":"M1"}],"u":[]}') == [{"id": "M1"}]
+    assert parse_json('```json\n{"a":1}\n```') == {"a": 1}

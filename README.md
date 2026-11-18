@@ -114,6 +114,11 @@ pack.txt ─► split (code) ─► reader: ONE model call [reading] ─► item
 So the usual prediction is: **only `reading` makes a model call.** The impact report (`changed` vs `untouched`)
 shows which areas actually changed.
 
+## Constraint kinds beyond the sample
+
+Fixed clock times (`at_time`), percentage charges (`percent_charge`), reserve (`reserve_pct`), per-team /
+per-student / per-person costs, dietary splits (`diet_count`), judges leaving early. See SYSTEM_GUIDE.md §9.
+
 ## Rejecting a wrong message
 
 The plan is rebuilt with the new items. If a check that passed now fails (food below headcount, over budget,

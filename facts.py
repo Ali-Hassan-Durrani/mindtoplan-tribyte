@@ -8,7 +8,7 @@ MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
 
 # keys where several values can be true at once (no superseding)
-MULTI_KEYS = {"feature", "lacks_feature", "requires_feature", "rule", "other", "late_min"}
+MULTI_KEYS = {"feature", "lacks_feature", "requires_feature", "rule", "other", "late_min", "judges_leaving_early"}
 NOT_FACT_KINDS = {"suggestion", "question", "irrelevant"}
 VENDOR_KEYS = {"capacity", "price", "feature", "unavailable", "price_per_head", "delivery_fee", "tier", "order_qty"}
 
@@ -42,7 +42,7 @@ def num(v):
 
 # one value per event, whatever area/entity label the model attached
 GLOBAL_KEYS = {"students", "team_size", "staff", "duration_min", "budget_total", "start_time", "location",
-               "judges_available", "honorarium", "minutes_per_team", "max_teams_per_judge"}
+               "judges_available", "honorarium", "minutes_per_team", "max_teams_per_judge", "reserve_pct"}
 
 
 def key_of(f):
