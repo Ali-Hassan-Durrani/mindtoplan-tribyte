@@ -33,7 +33,23 @@ streamlit run app.py             # web viewer + add-message box (same function a
 
 ### Model choice
 
-MODEL_CHOICE_PLACEHOLDER
+We use **`gemini-3.5-flash-lite`** (Gemini OpenAI-compatible endpoint, `REASONING_EFFORT` empty): a small,
+non-thinking model, which fits the small-model bonus and keeps tokens low. Chosen by a benchmark run one model
+at a time: the sample pack + both practice messages + a Roman Urdu generator update, and an invented unseen
+pack (new constraint kinds, stale price, injection, irrelevant message) + a price correction + a false
+budget claim, twice each:
+
+| Model | Correct runs | Failed calls | Full run | Update | Tokens full / update |
+|---|---|---|---|---|---|
+| **gemini-3.5-flash-lite** | **14/14** | **0/14** | 3.7 s avg (max 4.8) | 1.3 s avg (max 2.0) | ~2,400 / ~900 |
+| gemini-3.1-flash-lite | 8/14* | 3/15 | 26 s avg (max 115) | 10 s avg (max 55) | ~1,400 / ~800 |
+| gemini-3.8-flash (`low`) | slower (17 s full), hidden thinking tokens, 503 "overloaded" errors in testing | | | | |
+| gemini-2.5-flash-lite | no longer served (404) | | | | |
+| Groq qwen3.8-27b | free tier caps output at 1,000 tokens/min: too low for a full run | | | | |
+
+\*partly disturbed by rate limits from a parallel test on the same key. If the organizers' small-model list
+excludes our model, change `MODEL_NAME` in `.env` (no code change) and run `python smoke.py`.
+Free-tier keys are rate limited: run one command at a time, as in the judged test.
 
 ## Judged test run (checklist)
 
@@ -76,7 +92,7 @@ pack.txt ─► split (code) ─► reader: ONE model call [reading] ─► item
 | `validate.py` | Deterministic checks: correct figures, within budget, venue fits, schedule valid, enough judges, all areas covered, plus every stated hard rule via a generic `{metric, op, value}` evaluator (eq, ne, lt, lte, gt, gte, within, requires, excludes). Unknown rule → UNRESOLVED, never VALID. | Nobody would know whether the plan is valid; the model would be trusted. |
 | `llm.py` | The only model access. `Budgeter`: full run 120 s, update 60 s and max 5 calls (retries count), stops early with "incomplete". Records every call: model name from the API response, area tag, full input/output, provider token usage ("unavailable" if missing, never estimated). | Limits could be exceeded; trace could misreport. |
 | `report.py` | Readable plan/trace text, `out/` files, rich terminal output. | No saved files to upload. |
-| `app.py` | Streamlit viewer: status, plan with "why?" evidence, messages/conflicts, trace, update box. | UI points. |
+| `app.py`, `ui.py` | Streamlit viewer (light/dark toggle): status hero + 3-step guide, check cards, plan cards with "Why?" evidence for every decision, schedule timeline, budget bar, message chips, trace call cards, update box with before→after diff. `ui.py` holds only CSS/HTML helpers. | UI points; judges could not see plan, trace and rejections at a glance. |
 
 ## Which areas make model calls (for the prediction slip)
 
