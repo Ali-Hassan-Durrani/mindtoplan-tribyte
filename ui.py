@@ -63,6 +63,11 @@ code,pre{{background:var(--card2)!important;color:var(--text)!important}}
 .bar{{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--card2);border:1px solid var(--border);transform-origin:left;animation:grow .35s ease-out both}}
 .legend{{margin:6px 0 10px}} .legend span{{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:.8rem;color:var(--muted)}}
 .legend i{{width:10px;height:10px;border-radius:2px;display:inline-block}}
+.wf{{display:grid;grid-template-columns:minmax(140px,30%) 1fr 110px;gap:10px;align-items:center;font-size:.82rem;padding:3px 0;border-bottom:1px dashed var(--border)}}
+.wf:last-child{{border-bottom:none;font-weight:650}}
+.wl{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}} .wv{{text-align:right;font-variant-numeric:tabular-nums}}
+.wt{{position:relative;height:14px;background:var(--card2);border-radius:3px}}
+.wt div{{position:absolute;top:0;bottom:0;border-radius:3px;transform-origin:left;animation:grow .35s ease-out both}}
 .roster{{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}}
 .roster div{{border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:.8rem;background:var(--card)}}
 .roster b{{display:block;font-size:.75rem;color:var(--muted);font-weight:600}}

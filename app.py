@@ -221,6 +221,22 @@ with tabs[1]:
     rem = max(cap - float(b["total"]) - res, 0)
     tot = max(cap, float(b["total"]) + res) or 1
     over = float(b["total"]) + res > cap
+    # waterfall: start from the budget, each cost steps down from what is left, end at the remaining amount
+    steps, run_ = [("Budget", cap, 0.0, cap, "#64748b")], cap
+    for x in b["lines"] + ([{"item": "Reserve held back", "amount": res, "type": "reserve"}] if res else []):
+        amt = float(x["amount"])
+        col = {"committed": "#64748b", "reserve": "var(--warn)", "percent": "#7c3aed"}.get(x["type"], "var(--accent)")
+        steps.append((x["item"], -amt, run_ - amt, run_, col))
+        run_ -= amt
+    steps.append(("Remaining", run_, min(run_, 0.0), max(run_, 0.0), "var(--bad)" if run_ < 0 else "var(--ok)"))
+    lo_, hi_ = min(0.0, run_), max(cap, 1.0)
+    span = hi_ - lo_
+    wf = "".join(
+        f'<div class="wf"><div class="wl">{e(label)}</div><div class="wt"><div style="left:{100 * (a - lo_) / span:.2f}%;'
+        f'width:{max(100 * (z - a) / span, 0.3):.2f}%;background:{col}"></div></div>'
+        f'<div class="wv">{rs(abs(val)) if label in ("Budget", "Remaining") else "−" + rs(abs(val))}</div></div>'
+        for label, val, a, z, col in steps)
+    html('<div class="panel"><div class="small muted" style="margin-bottom:6px">Budget waterfall</div>' + wf + "</div>")
     html('<div class="panel"><div class="bar">'
          f'<div style="width:{100 * com / tot:.1f}%;background:#64748b"></div>'
          f'<div style="width:{100 * est / tot:.1f}%;background:{"var(--bad)" if over else "var(--accent)"}"></div>'
