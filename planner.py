@@ -17,7 +17,8 @@ def ev(f):
     return {"msg": f["msg"], "sender": f["sender"], "date": f["date"], "quote": f["q"]} if f else None
 
 
-def derive(v):
+def derive(v, judges=None):
+    """judges: force a judge count (used by the plan search); None = the minimum needed."""
     d = {"assumptions": [], "missing": []}
     for k in ("students", "team_size", "staff", "duration_min", "budget_total"):
         d[k] = v.val(k)
@@ -41,6 +42,8 @@ def derive(v):
         d["judges_needed"] = ja
     d["judges_used"] = min(x for x in (d["judges_needed"], ja) if x is not None) \
         if (d["judges_needed"] is not None or ja is not None) else None
+    if judges is not None:
+        d["judges_used"] = judges
     lates = [num(f["v"]) or 0 for f in v.all("late_min")]
     d["late_max"] = max(lates) if lates else 0
     if d["teams"] and d["judges_used"] and d["minutes_per_team"]:
@@ -369,22 +372,31 @@ def build_plan(items):
     v = View(items)
     v.optional = [f for f in items if f.get("status") == "optional" and num(f["v"]) is not None]
     d = derive(v)
-    venues_ok, venues_rej, needs = venue_candidates(v, d)
     diets = [f["e"] for f in v.all("diet_count")]
     # options that exist for a dietary need are not candidates for the main meal
-    foods = [o for o in food_options(v) if not any(_diet_match(x, _diet_words(o["name"]) | _diet_words(o["tier"])) for x in diets)] \
-        or food_options(v)
+    foods = [o for o in food_options(v) if not any(_diet_match(x, _diet_words(o["name"]) | _diet_words(o["tier"])) for x in diets)]         or food_options(v)
     qty_f = v.get("order_qty", "food")
-    attempts, first = [], None
-    for food in foods or [None]:
-        for venue in venues_ok or [None]:
-            plan = assemble(v, d, venue, venues_ok, venues_rej, needs, food, qty_f)
-            res = validate(plan, v)
-            plan["validation"] = res
-            first = first or plan
-            attempts.append(plan)
-            if res["status"] == "VALID":
-                return plan
+    # judge counts to try: from the minimum needed up to all available (more judges = shorter judging)
+    jn, ja = d["judges_used"], d["judges_available"]
+    judge_opts = list(range(int(jn), int(min(ja, jn + 15)) + 1)) if jn and ja and ja > jn else [None]
+    attempts, first, tried = [], None, 0
+    for food in foods or [None]:                       # meal preference first (standard, then cheaper)
+        valid = []
+        for j in judge_opts:
+            dj = derive(v, j) if j is not None else d
+            venues_ok, venues_rej, needs = venue_candidates(v, dj)
+            for venue in venues_ok or [None]:
+                plan = assemble(v, dj, venue, venues_ok, venues_rej, needs, food, qty_f)
+                plan["validation"] = validate(plan, v)
+                tried += 1
+                first = first or plan
+                attempts.append(plan)
+                if plan["validation"]["status"] == "VALID":
+                    valid.append(plan)
+        if valid:                                      # cheapest valid combination of venue x judges
+            best = min(valid, key=lambda p: (p["budget"]["total"], p["derived"]["judges_used"]))
+            best["search"] = {"tried": tried, "valid": len(valid)}
+            return best
     # nothing valid: prefer a plan with fewest failures
     return min(attempts, key=lambda p: sum(c["result"] == "FAIL" for c in p["validation"]["checks"])) if attempts else first
 

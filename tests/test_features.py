@@ -172,3 +172,16 @@ def test_window_too_small_fails():
 def test_not_enough_time_left_fails():
     p, _ = sched([item("schedule", "activity_min", 150, e="workshop")])
     assert check(p, "schedule valid")["result"] == "FAIL"
+
+
+def test_judge_search_adds_judges_when_minimum_does_not_fit():
+    # 6 judges -> 4 rounds x 10 = 40 min judging leaves too little hacking; 8 judges -> 3 rounds fits
+    p = plan_of([item("schedule", "activity_min", 40, e="workshop")])
+    assert p["validation"]["status"] == "VALID"
+    assert p["derived"]["judges_used"] == 8 and p["schedule"]["judging_min"] == 30
+    assert p["search"]["tried"] > 1
+
+
+def test_judge_search_keeps_minimum_when_it_fits():
+    p = plan_of([])
+    assert p["derived"]["judges_used"] == 6
