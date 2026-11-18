@@ -126,7 +126,7 @@ area: event|venue|schedule|food|judging|budget. kind: fact|update|suggestion|que
 Use ONLY these keys (numbers as plain numbers, money in rupees, times in minutes):
 event: students, team_size, staff, duration_min, budget_total, start_time("HH:MM" 24h), location
 venue (e=venue name): capacity, price, feature(v=facility it has), lacks_feature(v=facility it lacks or is broken), unavailable(v=true); requires_feature(e="need",v=facility) when the event needs a facility
-schedule: break_min(e=break name, h=true if required), activity_min(e=activity name), at_time(e=break/activity name, v="HH:MM" 24h fixed clock time it must start)
+schedule: break_min(e=break name, h=true if required), activity_min(e=activity name), at_time(e=break/activity name, v="HH:MM" start|"end HH:MM"|"+N" min after event start|"HH:MM-HH:MM" window)
 food (e=option name, lower case without price): price_per_head, delivery_fee(e=option, or e="delivery" if for the whole order), tier(v=standard for the normal/main meal, basic for a cheaper/lighter one, premium), order_qty(only if a vendor states a quantity they will supply), diet_count(e=diet e.g. vegetarian, v=number of people needing it)
 judging: judges_available, honorarium(per judge), minutes_per_team, max_teams_per_judge, late_min(e=who), judges_leaving_early(v=how many judges leave before judging ends)
 budget (e=item name): expense(money the organizers already spent/ordered; NEVER a vendor's price or quote), optional_cost(a request, idea or quote not approved), cost_per_team|cost_per_student|cost_per_person|cost_per_judge, percent_charge(e=base: total|venue|food|judging|committed|item, v=percent), reserve_pct(v=percent of budget to keep unspent)

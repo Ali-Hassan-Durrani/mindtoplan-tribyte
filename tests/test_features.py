@@ -134,3 +134,41 @@ def test_missing_quantity_needs_clarification():
 def test_percent_with_unknown_base_needs_clarification():
     p = plan_of([item("budget", "percent_charge", 5, e="spaceship", sender="Accounts", role="finance")])
     assert check(p, "within budget")["result"] == "UNRESOLVED"
+
+
+def sched(extra, start="10:00"):
+    pre = [item("event", "start_time", start)] if start else []
+    p = plan_of(pre + extra)
+    return p, {b["name"].lower(): b for b in p["schedule"]["blocks"]}
+
+
+def test_anchor_exact_end_time():
+    p, b = sched([item("schedule", "at_time", "end 11:40", e="tea break")])
+    assert b["tea break"]["end"] == 11 * 60 + 40 and p["validation"]["status"] == "VALID"
+
+
+def test_anchor_minute_offset_without_clock_start():
+    p, b = sched([item("schedule", "at_time", "+75", e="tea break")], start=None)
+    assert b["tea break"]["start"] == 75 and p["validation"]["status"] == "VALID"
+
+
+def test_anchor_window():
+    p, b = sched([item("schedule", "at_time", "10:20-11:00", e="tea break")])
+    t = b["tea break"]
+    assert 10 * 60 + 20 <= t["start"] and t["end"] <= 11 * 60 and p["validation"]["status"] == "VALID"
+
+
+def test_conflicting_anchors_fail():
+    p, _ = sched([item("schedule", "at_time", "11:00", e="tea break"),
+                  item("schedule", "at_time", "11:10", e="meal break")])
+    assert check(p, "schedule valid")["result"] == "FAIL"
+
+
+def test_window_too_small_fails():
+    p, _ = sched([item("schedule", "at_time", "10:20-10:30", e="tea break")])
+    assert check(p, "schedule valid")["result"] == "FAIL"
+
+
+def test_not_enough_time_left_fails():
+    p, _ = sched([item("schedule", "activity_min", 150, e="workshop")])
+    assert check(p, "schedule valid")["result"] == "FAIL"

@@ -139,9 +139,10 @@ def schedule_plan(v, d):
     start = clock(st["v"]) if st else None
     if start is None:
         st, start = None, 0
-    anchors = [(f, clock(f["v"])) for f in v.all("at_time")]
+    anchors = [(f, anchor_spec(f["v"])) for f in v.all("at_time")]
     issues = {"fail": [], "unresolved": []}
-    if anchors and st:
+    needs_clock = any(sp is None or not sp["offset"] for _, sp in anchors)
+    if anchors and (st or not needs_clock):
         blocks, hacking = _anchored(seq, anchors, start, total, issues)
     else:
         if anchors:
@@ -175,6 +176,24 @@ def clock(s):
     return h * 60 + mi if h < 24 and mi < 60 else None
 
 
+def anchor_spec(v):
+    """'13:30' start | 'end 15:00' / 'by 15:00' | '+90' minutes after event start (also 'end +90')
+    | '12:00-14:00' or 'between 12:00 and 14:00' window. Returns None if unreadable."""
+    s = str(v or "").strip().lower()
+    kind = "start"
+    m = re.match(r"^(end|ends|by|until|till|finish(?:es)?)\b\s*(?:at\s*)?(.*)$", s)
+    if m:
+        kind, s = "end", m.group(2).strip()
+    m = re.match(r"^\+\s*(\d+)\s*(m|min|mins|minutes)?$", s) or re.match(r"^(\d+)\s*(m|min|mins|minutes)\b", s)
+    if m:
+        return {"kind": kind, "a": int(m.group(1)), "offset": True}
+    parts = re.split(r"\s*(?:-|–|to|and)\s*", s.replace("between", "").strip())
+    if len(parts) == 2 and clock(parts[0]) is not None and clock(parts[1]) is not None:
+        return {"kind": "window", "a": clock(parts[0]), "b": clock(parts[1]), "offset": False}
+    t = clock(s)
+    return {"kind": kind, "a": t, "offset": False} if t is not None else None
+
+
 def _words(s):
     return {w for w in norm(s).split() if len(w) > 2 and w not in ("break", "time", "session", "the", "and", "for")} | \
         ({"meal", "lunch", "food"} if any(x in norm(s) for x in ("lunch", "meal", "food", "khana")) else set())
@@ -195,14 +214,21 @@ def _anchored(seq, anchors, start, total, issues):
     float from the middle; hacking fills every gap. Overlaps or out-of-window times are reported."""
     end = start + total
     items = [{"name": n, "min": m, "f": f} for n, m, f in seq if m > 0 and not n.startswith("Hacking")]
-    for f, t in anchors:
+    for f, sp in anchors:
         hit = next((it for it in items if _words(it["name"]) & _words(f["e"])), None)
         if hit is None:
             issues["unresolved"].append(f"time for '{f['e']}' ({f['v']}) matches no schedule block")
-        elif t is None:
+        elif sp is None:
             issues["unresolved"].append(f"cannot read time '{f['v']}' for {f['e']}")
+        elif "at" in hit or "window" in hit:
+            issues["fail"].append(f"conflicting times for {hit['name']}: {f['v']}")
         else:
-            hit["at"], hit["anchor"] = t, f
+            hit["anchor"] = f
+            t = start + sp["a"] if sp["offset"] else sp["a"]
+            if sp["kind"] == "window":
+                hit["window"] = (sp["a"], sp["b"])
+            else:
+                hit["at"] = t if sp["kind"] == "start" else t - hit["min"]
     pinned = []
     by = {it["name"].lower(): it for it in items}
     clos, judg, opn = by.get("closing"), by.get("judging"), by.get("opening")
@@ -220,7 +246,9 @@ def _anchored(seq, anchors, start, total, issues):
         pinned.append(judg)
     floating = [it for it in items if "at" not in it and it is not judg]
     mid = start + total // 2
-    for it in floating:   # free gap closest to mid-event that fits the block
+    floating.sort(key=lambda it: "window" not in it)       # windowed blocks first: they have less freedom
+    for it in floating:   # free gap closest to mid-event (inside its window, if any) that fits the block
+        lo, hi = it.get("window", (start, end))
         taken = sorted((p["at"], p["at"] + p["min"]) for p in pinned)
         gaps, t0 = [], start
         for a, z in taken:
@@ -228,8 +256,15 @@ def _anchored(seq, anchors, start, total, issues):
                 gaps.append((t0, a))
             t0 = max(t0, z)
         gaps.append((t0, end))
+        gaps = [(max(g0, lo), min(g1, hi)) for g0, g1 in gaps]
         fits = [max(g0, min(mid, g1 - it["min"])) for g0, g1 in gaps if g1 - g0 >= it["min"]]
-        it["at"] = min(fits, key=lambda x: abs(x - mid)) if fits else end
+        if fits:
+            it["at"] = min(fits, key=lambda x: abs(x - mid))
+        else:
+            it["at"] = end
+            if "window" in it:
+                issues["fail"].append(f"{it['name']} ({it['min']} min) cannot fit in its window "
+                                      f"{lo // 60:02d}:{lo % 60:02d}-{hi // 60:02d}:{hi % 60:02d}")
         pinned.append(it)
     pinned.sort(key=lambda it: it["at"])
     blocks, t, n = [], start, 0
