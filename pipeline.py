@@ -193,6 +193,9 @@ def _venue_prices(items, msg_id):
     for i in items:
         if i["msg"] == msg_id and i["k"] == "expense" and i["e"].strip().lower() in venues:
             i["a"], i["k"] = "venue", "price"
+        # "Hall B has a generator": a facility of a listed venue, not a requirement of the event
+        if i["msg"] == msg_id and i["k"] == "requires_feature" and i["e"].strip().lower() in venues:
+            i["k"], i["t"] = "feature", "fact"
 
 
 def _normalize(item):
@@ -213,7 +216,7 @@ def _normalize(item):
         item["a"], item["k"], item["e"] = "food", "delivery_fee", "delivery"   # a caterer's delivery charge
     elif item["t"] == "rule" and item["c"] and item["k"] not in ("requires_feature", "break_min", "activity_min"):
         item["k"] = "rule"                       # a checkable requirement is a rule, whatever key was used
-    elif item["k"] == "feature" and (item["t"] == "rule" or item["h"] or
+    elif item["k"] == "feature" and (item["t"] == "rule" or
                                      item["e"].strip().lower() in ("need", "required", "requirement", "")):
         item["k"] = "requires_feature"           # a demanded facility, not a property of one venue
 

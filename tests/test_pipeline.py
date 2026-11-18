@@ -1,4 +1,5 @@
 """End-to-end pipeline with the model replaced by a fake reader (no network)."""
+import copy
 import time
 
 import pytest
@@ -38,7 +39,7 @@ BASE = to_reader_items(base_pack())
 
 @pytest.fixture
 def script(monkeypatch):
-    s = {"PACK": ("Registrar", "institution", BASE, False)}
+    s = {"PACK": ("Registrar", "institution", copy.deepcopy(BASE), False)}
     monkeypatch.setattr(pipeline, "read_messages", fake_reader(s))
     return s
 
@@ -225,3 +226,12 @@ def test_unread_message_is_retried_next_run(script, monkeypatch):
     monkeypatch.setattr(pipeline, "read_messages", real)
     state, rep = pipeline.process("cricket score?")
     assert rep["new_messages"] == ["M2"] and state["messages"][-1]["status"] == "irrelevant"
+
+
+def test_hard_flagged_venue_feature_is_not_a_requirement(script):
+    script["PACK"][2].extend([
+        {"a": "venue", "e": "Lab 1", "k": "requires_feature", "v": "generator", "t": "fact", "h": True, "q": "Lab 1 has a generator"},
+        {"a": "venue", "e": "Auditorium", "k": "feature", "v": "projector", "t": "fact", "h": True, "q": "has projector"}])
+    state, _ = pipeline.process("PACK all facts")
+    assert state["plan"]["venue"]["required_features"] == []
+    assert state["plan"]["validation"]["status"] == "VALID"
