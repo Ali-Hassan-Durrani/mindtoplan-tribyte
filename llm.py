@@ -81,7 +81,8 @@ def call_model(budgeter, trace, area, system, user, message_ids, update_id, max_
         t0 = time.monotonic()
         try:
             client = _client(timeout=max(budgeter.remaining(), 1))
-            resp = client.chat.completions.create(
+            extra = {"reasoning_effort": config.REASONING_EFFORT} if config.REASONING_EFFORT else {}
+            resp = client.chat.completions.create(**extra,
                 model=config.MODEL_NAME, temperature=0, max_tokens=max_tokens,
                 response_format={"type": "json_object"},
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])

@@ -10,7 +10,8 @@ load_dotenv(ROOT / ".env")
 BASE_URL = os.getenv("BASE_URL", "").strip()
 MODEL_NAME = os.getenv("MODEL_NAME", "").strip()
 API_KEY = os.getenv("API_KEY", "").strip()
-ALLOWED_MODELS = [m.strip() for m in os.getenv("ALLOWED_MODELS", "").split(",") if m.strip()]
+REASONING_EFFORT = os.getenv("REASONING_EFFORT", "").strip()   # optional, for thinking models (e.g. low)
+ALLOWED_MODELS =[m.strip() for m in os.getenv("ALLOWED_MODELS", "").split(",") if m.strip()]
 
 STATE_DIR = ROOT / ".state"
 OUT_DIR = ROOT / "out"
